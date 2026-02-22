@@ -1,0 +1,108 @@
+.reservation-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  padding: 18px 0;
+}
+
+.map-section {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.branch-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.03);
+  max-height: 700px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.branch-panel h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #fff;
+}
+
+.branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  margin-bottom: 12px;
+}
+
+.branch-card {
+  background: rgba(255,255,255,0.02);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.branch-card:hover {
+  border-color: rgba(124,92,255,0.3);
+  background: rgba(124,92,255,0.08);
+}
+
+.branch-card.active {
+  border-color: var(--accent-2);
+  background: rgba(124,92,255,0.15);
+}
+
+.branch-name {
+  font-weight: 600;
+  color: #fff;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.branch-theme {
+  color: var(--accent-2);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.branch-desc {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.booking-section {
+  border-top: 1px solid rgba(255,255,255,0.03);
+  padding-top: 12px;
+}
+
+.booking-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #fff;
+}
+
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(90deg, #7c5cff, #9575ff);
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(124,92,255,0.3);
+}
+
+@media (max-width: 1024px) {
+  .reservation-layout {
+    grid-template-columns: 1fr;
+  }
+}
