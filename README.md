@@ -1,6 +1,6 @@
 запуск бек
-```
-cd /emae/backend
+```bash
+cd emae/backend
 pip install -r requirements.txt
 ```
 запуск фронт
