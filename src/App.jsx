@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { STYLES } from './styles/globalStyles';
 import { useToast } from './hooks/useToast';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import { Header } from './components/layout/Header';
 import { BottomBar } from './components/layout/BottomBar';
 import { HeroPage } from './components/hero/HeroPage';
@@ -15,6 +15,7 @@ import { ReserveModal } from './components/reservation/ReserveModal';
 import { Toast } from './components/ui/Toast';
 
 function AppContent() {
+  const { user } = useAuth();
   const [page, setPage] = useState("home");
   const [modal, setModal] = useState(null);
   const [cart, setCart] = useState([]);
@@ -34,6 +35,15 @@ function AppContent() {
     window.addEventListener("scroll", h);
     return () => window.removeEventListener("scroll", h);
   }, []);
+
+  useEffect(() => {
+    // Если пользователь не залогинен — показываем окно входа и не даём закрыть его
+    if (!user) {
+      setModal("login");
+    } else {
+      setModal(null);
+    }
+  }, [user]);
 
   const addToCart = useCallback(dish => {
     setCart(c => {
@@ -71,7 +81,7 @@ function AppContent() {
 
       {modal === "login" && (
         <LoginModal 
-          onClose={() => setModal(null)} 
+          onClose={() => { if (user) setModal(null); }}
           onRegister={() => setModal("register")}
           onForgotPassword={() => setModal("forgot")}
           toast={toast}
@@ -79,14 +89,14 @@ function AppContent() {
       )}
       {modal === "register" && (
         <RegisterModal 
-          onClose={() => setModal(null)} 
+          onClose={() => { if (user) setModal(null); }}
           onLogin={() => setModal("login")} 
           toast={toast}
         />
       )}
       {modal === "forgot" && (
         <ForgotPasswordModal
-          onClose={() => setModal(null)}
+          onClose={() => { if (user) setModal(null); }}
           onBackToLogin={() => setModal("login")}
           toast={toast}
         />

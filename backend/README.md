@@ -35,9 +35,10 @@ pip install -r requirements.txt
 run.bat
 ```
 
-Или в терминале:
-```bash
-python main.py
+Или в терминале (рекомендуемый порт для разработки — 8001):
+```powershell
+cd backend
+python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 ### macOS/Linux
@@ -45,7 +46,7 @@ python main.py
 ./run.sh
 ```
 
-Сервер запустится на `http://localhost:8000`
+По умолчанию сервер ранее запускался на `http://localhost:8000`, но если порт занят — запустите на 8001 как выше.
 
 ## Документация API
 

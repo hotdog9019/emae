@@ -28,4 +28,28 @@ class Reservation(Base):
     guests = Column(Integer, nullable=False)
     special_requests = Column(Text, nullable=True)
     is_confirmed = Column(Boolean, default=False)
+    restaurant_id = Column(Integer, nullable=True, index=True)
+    table_id = Column(Integer, nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Restaurant(Base):
+    __tablename__ = "restaurants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    address = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Table(Base):
+    __tablename__ = "tables"
+
+    id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    seats = Column(Integer, nullable=False, default=2)
+    x = Column(Integer, nullable=True)
+    y = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

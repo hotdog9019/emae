@@ -36,6 +36,8 @@ class ReservationCreate(BaseModel):
     time: str
     guests: int
     special_requests: Optional[str] = None
+    restaurant_id: Optional[int] = None
+    table_id: Optional[int] = None
 
 
 class ReservationResponse(BaseModel):
@@ -48,6 +50,8 @@ class ReservationResponse(BaseModel):
     guests: int
     special_requests: Optional[str]
     is_confirmed: bool
+    restaurant_id: Optional[int]
+    table_id: Optional[int]
     created_at: datetime
 
     class Config:

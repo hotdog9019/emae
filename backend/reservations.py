@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Reservation, User
 from schemas import ReservationCreate, ReservationResponse, ReservationUpdate
+from models import Table
 
 router = APIRouter(prefix="/api/reservations", tags=["reservations"])
 
@@ -24,6 +25,20 @@ def create_reservation(
         )
     
     # Создаем бронирование
+    # Проверяем выбранный ресторан/столик (если переданы)
+    if reservation.table_id:
+        tbl = db.query(Table).filter(Table.id == reservation.table_id).first()
+        if not tbl or tbl.restaurant_id != reservation.restaurant_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный столик или ресторан")
+        # Проверим, не забронирован ли столик на это время
+        exists = db.query(Reservation).filter(
+            Reservation.table_id == reservation.table_id,
+            Reservation.date == reservation.date,
+            Reservation.time == reservation.time
+        ).first()
+        if exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Столик уже забронирован на выбранное время")
+
     db_reservation = Reservation(
         user_id=user_id,
         email=reservation.email,
@@ -31,7 +46,9 @@ def create_reservation(
         date=reservation.date,
         time=reservation.time,
         guests=reservation.guests,
-        special_requests=reservation.special_requests
+        special_requests=reservation.special_requests,
+        restaurant_id=reservation.restaurant_id,
+        table_id=reservation.table_id
     )
     
     db.add(db_reservation)

@@ -1,0 +1,18 @@
+.filter-panel{padding:12px;border:1px solid var(--border);background:var(--surface);margin:8px 0;border-radius:8px;display:flex;flex-wrap:wrap;gap:8px}
+.filter-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:transparent;border:1px solid rgba(255,255,255,0.02);border-radius:8px;font-size:14px;font-family:var(--ff-b);color:var(--text)}
+.filter-btn{background:transparent;color:var(--gold);border:1px solid var(--gold);padding:8px 12px;border-radius:8px;font-family:var(--ff-b);font-size:12px;letter-spacing:1px;font-weight:600;margin-left:8px;cursor:pointer;transition:all .28s var(--ease)}
+.filter-btn:hover{background:var(--gold-glow);color:var(--text);}
+.filter-btn.on{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1206;border:1px solid transparent;box-shadow:0 8px 24px rgba(201,169,110,.2);transform:translateY(-1px)}
+
+/* Specific styles for Reset/Apply buttons inside filter panel */
+.filter-panel .btn{background:var(--text);color:var(--bg);border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:8px;font-family:var(--ff-b);font-weight:600;cursor:pointer}
+.filter-panel .btn:hover{background:#ffffff;box-shadow:0 10px 30px rgba(0,0,0,0.18);}
+.btn{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface)}
+.link-like{background:none;border:none;color:var(--gold);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit}
+.social-link{background:none;border:none;padding:0}
+
+@media (max-width: 700px) {
+	.filter-panel{padding:10px}
+	.filter-item{font-size:13px;padding:6px}
+	.filter-btn{padding:7px 10px}
+}

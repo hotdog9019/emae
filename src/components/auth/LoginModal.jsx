@@ -56,7 +56,7 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
           </button>
         </div>
         <div className="m-ftr">
-          <p>Нет аккаунта? <a onClick={onRegister}>Зарегистрироваться</a></p>
+          <p>Нет аккаунта? <button type="button" className="link-like" onClick={onRegister}>Зарегистрироваться</button></p>
         </div>
       </div>
 

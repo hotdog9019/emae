@@ -194,7 +194,7 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
 
         <div className="m-ftr">
           <p>
-            <a onClick={onBackToLogin}>← Вернуться ко входу</a>
+            <button type="button" className="link-like" onClick={onBackToLogin}>← Вернуться ко входу</button>
           </p>
         </div>
       </div>

@@ -66,15 +66,15 @@ export function ContactsPage({ toast }) {
           <div className="info-card social-card">
             <h3 className="info-title">Мы в соцсетях</h3>
             <div className="social-links">
-              <a href="#" className="social-link" onClick={(e) => { e.preventDefault(); toast.ok("Instagram: " + CONTACT_INFO.social.instagram); }}>
+              <button type="button" className="social-link" onClick={() => { toast.ok("Instagram: " + CONTACT_INFO.social.instagram); }}>
                 <Icons.Instagram /> Instagram
-              </a>
-              <a href="#" className="social-link" onClick={(e) => { e.preventDefault(); toast.ok("Telegram: " + CONTACT_INFO.social.telegram); }}>
+              </button>
+              <button type="button" className="social-link" onClick={() => { toast.ok("Telegram: " + CONTACT_INFO.social.telegram); }}>
                 <Icons.Telegram /> Telegram
-              </a>
-              <a href="#" className="social-link" onClick={(e) => { e.preventDefault(); toast.ok("VK: " + CONTACT_INFO.social.vk); }}>
+              </button>
+              <button type="button" className="social-link" onClick={() => { toast.ok("VK: " + CONTACT_INFO.social.vk); }}>
                 <Icons.VK /> VK
-              </a>
+              </button>
             </div>
           </div>
         </div>

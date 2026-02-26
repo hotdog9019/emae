@@ -65,7 +65,7 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
             </button>
           )}
         </div>
-        <button className="ico-btn" onClick={() => setCartOpen(true)} title="Корзина">
+        <button className="ico-btn" onClick={() => user ? setCartOpen(true) : setModal("login")} title="Корзина">
           <Icons.Cart />
           {cartCount > 0 && <span className="bdg">{cartCount}</span>}
         </button>

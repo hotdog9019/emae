@@ -84,14 +84,14 @@ export function RegisterModal({ onClose, onLogin, toast }) {
           </div>
           <div className="f-check">
             <input type="checkbox" id="ag" checked={f.agree} onChange={upd("agree")}/>
-            <label htmlFor="ag">Я принимаю <a href="#">условия использования</a> и <a href="#">политику конфиденциальности</a></label>
+            <label htmlFor="ag">Я принимаю <button type="button" className="link-like" onClick={() => toast.info('Откроется: условия использования')}>условия использования</button> и <button type="button" className="link-like" onClick={() => toast.info('Откроется: политика конфиденциальности')}>политику конфиденциальности</button></label>
           </div>
           <button className="submit" onClick={submit} disabled={loading || !f.email || !f.username || !f.pass}>
             {loading ? "Создаём аккаунт..." : "Зарегистрироваться"}
           </button>
         </div>
         <div className="m-ftr">
-          <p>Уже есть аккаунт? <a onClick={onLogin}>Войти</a></p>
+          <p>Уже есть аккаунт? <button type="button" className="link-like" onClick={onLogin}>Войти</button></p>
         </div>
       </div>
     </div>
