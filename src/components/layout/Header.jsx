@@ -31,7 +31,12 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
           <button key={n}
             className={`nav-btn${(n==="Главная"&&page==="home")||(n==="Меню"&&page==="menu")||(n==="Контакты"&&page==="contacts") ? " on" : ""}`}
             onClick={() => { 
-              if(n==="Резервирование"){ setModal("reserve"); return; } 
+              if(n==="Резервирование"){ 
+                // Allow opening reserve only for registered users
+                if(!user){ setModal("reserve-error"); return; }
+                setModal("reserve"); 
+                return; 
+              }
               if(n==="Меню"){ setPage("menu"); return; }
               if(n==="Контакты"){ setPage("contacts"); return; }
               setPage("home"); 
@@ -41,34 +46,19 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
         ))}
       </nav>
       <div className="hdr-right">
-        <div className="user-menu" ref={profileRef}>
-          {user ? (
-            <div className="user-menu-wrapper">
-              <button className="ico-btn" onClick={() => setShowProfile(!showProfile)} title="Профиль">
-                <Icons.User />
+        <div className="user-menu-right" ref={profileRef}>
+          <button className="ico-btn" onClick={() => user ? setShowProfile(s => !s) : setModal("login")} title={user ? "Профиль" : "Войти"}>
+            <Icons.User />
+          </button>
+          {showProfile && user && (
+            <div className="user-profile" style={{position:'absolute',right:0,top:'100%',marginTop:8}}>
+              <div className="user-profile-header">Привет, {user.username}! 👋</div>
+              <button className="logout-btn" onClick={() => { logout(); setShowProfile(false); }}>
+                Выход
               </button>
-              {showProfile && (
-                <div className="user-profile">
-                  <div className="user-profile-header">Привет, {user.username}! 👋</div>
-                  <button className="logout-btn" onClick={() => {
-                    logout();
-                    setShowProfile(false);
-                  }}>
-                    Выход
-                  </button>
-                </div>
-              )}
             </div>
-          ) : (
-            <button className="ico-btn" onClick={() => setModal("login")} title="Войти">
-              <Icons.User />
-            </button>
           )}
         </div>
-        <button className="ico-btn" onClick={() => user ? setCartOpen(true) : setModal("login")} title="Корзина">
-          <Icons.Cart />
-          {cartCount > 0 && <span className="bdg">{cartCount}</span>}
-        </button>
       </div>
 
       <style jsx>{`

@@ -37,12 +37,8 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    // Если пользователь не залогинен — показываем окно входа и не даём закрыть его
-    if (!user) {
-      setModal("login");
-    } else {
-      setModal(null);
-    }
+    // Previously we forced login on entry; now allow browsing without login.
+    // Modal state will be controlled by user actions (login/register/reserve).
   }, [user]);
 
   const addToCart = useCallback(dish => {
@@ -81,7 +77,7 @@ function AppContent() {
 
       {modal === "login" && (
         <LoginModal 
-          onClose={() => { if (user) setModal(null); }}
+          onClose={() => setModal(null)}
           onRegister={() => setModal("register")}
           onForgotPassword={() => setModal("forgot")}
           toast={toast}
@@ -89,14 +85,14 @@ function AppContent() {
       )}
       {modal === "register" && (
         <RegisterModal 
-          onClose={() => { if (user) setModal(null); }}
+          onClose={() => setModal(null)}
           onLogin={() => setModal("login")} 
           toast={toast}
         />
       )}
       {modal === "forgot" && (
         <ForgotPasswordModal
-          onClose={() => { if (user) setModal(null); }}
+          onClose={() => setModal(null)}
           onBackToLogin={() => setModal("login")}
           toast={toast}
         />
@@ -106,6 +102,23 @@ function AppContent() {
           onClose={() => setModal(null)} 
           toast={toast}
         />
+      )}
+      {modal === "reserve-error" && (
+        <div className="modal-ov">
+          <div className="modal">
+            <div className="m-hdr">
+              <div className="m-ttl">Ошибка</div>
+              <button className="m-x" onClick={() => setModal(null)}>✕</button>
+            </div>
+            <div className="m-body">
+              <p>Для бронирования необходимо зарегистрироваться. Пожалуйста, войдите или создайте аккаунт.</p>
+            </div>
+            <div className="m-ftr">
+              <button className="btn btn-ghost" onClick={() => setModal("login")}>Войти</button>
+              <button className="btn btn-gold" style={{marginLeft:8}} onClick={() => setModal("register")}>Зарегистрироваться</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {cartOpen && (
