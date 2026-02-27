@@ -2,17 +2,15 @@ const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000/api';
 
 export const api = {
   auth: {
-    register: async (email, username, password, fullName, phone) => {
+    register: async (name, password, roleId = 1) => {
       try {
         const res = await fetch(`${API_BASE}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email,
-            username,
+            name,
             password,
-            full_name: fullName,
-            phone
+            role_id: roleId
           })
         });
         if (!res.ok) {
@@ -28,12 +26,12 @@ export const api = {
       }
     },
 
-    login: async (email, password) => {
+    login: async (name, password) => {
       try {
         const res = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ name, password })
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }));

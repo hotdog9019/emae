@@ -4,14 +4,14 @@ import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 
 export function RegisterModal({ onClose, onLogin, toast }) {
-  const [f, setF] = useState({email:"",username:"",fullName:"",phone:"",pass:"",pass2:"",agree:false});
+  const [f, setF] = useState({name:"",pass:"",pass2:"",agree:false});
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   
   const upd = k => e => setF(p => ({...p, [k]: e.target.type==="checkbox" ? e.target.checked : e.target.value}));
   
   const submit = async () => {
-    if (!f.email || !f.username || !f.pass) {
+    if (!f.name || !f.pass) {
       toast.err("Заполните все обязательные поля");
       return;
     }
@@ -30,13 +30,7 @@ export function RegisterModal({ onClose, onLogin, toast }) {
     
     setLoading(true);
     try {
-      const user = await api.auth.register(
-        f.email,
-        f.username,
-        f.pass,
-        f.fullName,
-        f.phone
-      );
+      const user = await api.auth.register(f.name, f.pass, 1);
       login(user);
       toast.ok("Регистрация прошла успешно! 🎉"); 
       onClose();
@@ -56,23 +50,9 @@ export function RegisterModal({ onClose, onLogin, toast }) {
         </div>
         <div className="m-body">
           <div className="fg">
-            <div className="fl"><Icons.User />Email</div>
-            <input className="fi" type="email" placeholder="ваш@email.com" 
-                   value={f.email} onChange={upd("email")}/>
-          </div>
-          <div className="fg">
-            <div className="fl">Никнейм</div>
-            <input className="fi" placeholder="Ваш никнейм" value={f.username} onChange={upd("username")}/>
-          </div>
-          <div className="fi-row">
-            <div className="fg">
-              <div className="fl">Полное имя</div>
-              <input className="fi" placeholder="Иван Иванов" value={f.fullName} onChange={upd("fullName")}/>
-            </div>
-            <div className="fg">
-              <div className="fl">Телефон</div>
-              <input className="fi" placeholder="+7 999 123-45-67" value={f.phone} onChange={upd("phone")}/>
-            </div>
+            <div className="fl"><Icons.User />Имя пользователя</div>
+            <input className="fi" type="text" placeholder="Ваше имя" 
+                   value={f.name} onChange={upd("name")}/>
           </div>
           <div className="fg" style={{marginTop:20}}>
             <div className="fl"><Icons.Lock />Пароль</div>
@@ -86,7 +66,7 @@ export function RegisterModal({ onClose, onLogin, toast }) {
             <input type="checkbox" id="ag" checked={f.agree} onChange={upd("agree")}/>
             <label htmlFor="ag">Я принимаю <button type="button" className="link-like" onClick={() => toast.info('Откроется: условия использования')}>условия использования</button> и <button type="button" className="link-like" onClick={() => toast.info('Откроется: политика конфиденциальности')}>политику конфиденциальности</button></label>
           </div>
-          <button className="submit" onClick={submit} disabled={loading || !f.email || !f.username || !f.pass}>
+          <button className="submit" onClick={submit} disabled={loading || !f.name || !f.pass}>
             {loading ? "Создаём аккаунт..." : "Зарегистрироваться"}
           </button>
         </div>

@@ -20,6 +20,7 @@ function AppContent() {
   const [modal, setModal] = useState(null);
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [reservation, setReservation] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const toast = useToast();
 
@@ -39,6 +40,35 @@ function AppContent() {
   useEffect(() => {
     // Previously we forced login on entry; now allow browsing without login.
     // Modal state will be controlled by user actions (login/register/reserve).
+  }, [user]);
+
+  useEffect(() => {
+    // загрузим бронь пользователя при входе
+    if (!user) {
+      setReservation(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await (await import('./utils/api')).api.reservations.getUserReservations(user.id);
+        if (cancelled) return;
+        if (!Array.isArray(list) || list.length === 0) {
+          setReservation(null);
+          return;
+        }
+        // выберем ближайшую по дате/времени бронь
+        const sorted = list.slice().sort((a,b) => {
+          const da = new Date(a.date + 'T' + (a.time || '00:00'));
+          const db = new Date(b.date + 'T' + (b.time || '00:00'));
+          return da - db;
+        });
+        setReservation(sorted[0] || null);
+      } catch (e) {
+        setReservation(null);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [user]);
 
   const addToCart = useCallback(dish => {
@@ -128,6 +158,7 @@ function AppContent() {
           onQty={setQty} 
           onRemove={removeItem} 
           toast={toast}
+          reservation={reservation}
         />
       )}
 

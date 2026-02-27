@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
-import auth
+import auth_new as auth
 import reservations
 import restaurants
 import admin
@@ -13,8 +13,19 @@ from database import SessionLocal
 def seed_restaurants():
     db: Session = SessionLocal()
     try:
+        # Создаем дефолтные роли если их нет
+        from models import Restaurant, Table, Role
+        
+        # Проверяем и создаем роли
+        default_roles = ["user", "admin", "manager"]
+        for role_name in default_roles:
+            existing_role = db.query(Role).filter(Role.name == role_name).first()
+            if not existing_role:
+                new_role = Role(name=role_name)
+                db.add(new_role)
+        db.commit()
+        
         # Если рестораны уже есть — не сидим
-        from models import Restaurant, Table
         # если рестораны уже есть — убедимся, что для каждого ресторана созданы все столики по макету
         if db.query(Restaurant).count() > 0:
             # ensure full layout tables exist for each restaurant

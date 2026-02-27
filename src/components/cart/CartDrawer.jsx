@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icons } from '../icons/Icons';
 
-export function CartDrawer({ cart, onClose, onQty, onRemove, toast }) {
+export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation }) {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   
   const checkout = async () => {
@@ -19,6 +19,14 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast }) {
           <button className="d-close" onClick={onClose}>✕</button>
         </div>
         <div className="d-items">
+          {reservation && (
+            <div className="d-reservation" style={{padding:12,marginBottom:12,background:'#0f1720',border:'1px solid rgba(255,255,255,0.04)',borderRadius:8}}>
+              <div style={{fontSize:14,fontWeight:700,color:'#ffd97a'}}>Забронировано место</div>
+              <div style={{marginTop:6,color:'#ddd',fontSize:13}}>{reservation.date} {reservation.time}</div>
+              <div style={{marginTop:4,color:'#aaa',fontSize:13}}>Гостей: {reservation.guests}</div>
+              <div style={{marginTop:4,color:'#aaa',fontSize:13}}>Ресторан: {reservation.restaurant && reservation.restaurant.address ? reservation.restaurant.address : (reservation.restaurant_id ? `#${reservation.restaurant_id}` : '—')}{reservation.table_id ? `, стол ${reservation.table_id}` : ''}</div>
+            </div>
+          )}
           {cart.length === 0 ? (
             <div className="d-empty">
               <div className="d-empty-icon">🛒</div>

@@ -4,19 +4,19 @@ import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 
 export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   
   const submit = async () => {
-    if (!email || !pass) return;
+    if (!name || !pass) return;
     setLoading(true);
     
     try {
-      const user = await api.auth.login(email, pass);
+      const user = await api.auth.login(name, pass);
       login(user);
-      toast.ok(`Добро пожаловать, ${user.username}! 👋`);
+      toast.ok(`Добро пожаловать, ${user.name}! 👋`);
       onClose();
     } catch (err) {
       toast.err(err.message || "Ошибка входа");
@@ -34,9 +34,9 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
         </div>
         <div className="m-body">
           <div className="fg">
-            <div className="fl"><Icons.User />Email</div>
-            <input className="fi" type="email" placeholder="ваш@email.com" 
-                   value={email} onChange={e => setEmail(e.target.value)}/>
+            <div className="fl"><Icons.User />Имя пользователя</div>
+            <input className="fi" type="text" placeholder="Ваше имя" 
+                   value={name} onChange={e => setName(e.target.value)}/>
           </div>
           <div className="fg">
             <div className="fl"><Icons.Lock />Пароль</div>
@@ -51,7 +51,7 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
             </button>
           </div>
 
-          <button className="submit" onClick={submit} disabled={loading || !email || !pass}>
+          <button className="submit" onClick={submit} disabled={loading || !name || !pass}>
             {loading ? "Входим..." : "Войти"}
           </button>
         </div>

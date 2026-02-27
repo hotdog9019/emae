@@ -82,7 +82,7 @@ export function ReserveModal({ onClose, toast }) {
     try {
       await api.reservations.create(
         user.id,
-        user.email,
+        "user@restaurant.com",
         f.phone,
         f.date,
         f.time,
@@ -108,8 +108,8 @@ export function ReserveModal({ onClose, toast }) {
         </div>
         <div className="m-body">
           <div className="fg">
-            <div className="fl">Email</div>
-            <input className="fi" type="email" placeholder={user.email} value={user.email} disabled style={{opacity:0.7}}/>
+            <div className="fl">Пользователь</div>
+            <input className="fi" type="text" placeholder={user.name} value={user.name} disabled style={{opacity:0.7}}/>
           </div>
           <div className="fg">
             <div className="fl"><Icons.Phone />Телефон</div>
