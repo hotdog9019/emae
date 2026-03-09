@@ -46,10 +46,10 @@ function AppContent() {
         const params = new URLSearchParams(search);
         if (isTelegramMagic) {
           const token = (params.get('token') || '').trim();
-          if (!token) throw new Error('РќРµ РїРµСЂРµРґР°РЅ С‚РѕРєРµРЅ РІС…РѕРґР° Telegram');
+          if (!token) throw new Error('Telegram login token is missing.');
           const userData = await api.auth.consumeTelegramMagic(token);
           login(userData);
-          toast.ok(`Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ, ${userData.name || 'РіРѕСЃС‚СЊ'}!`);
+          toast.ok(`Welcome, ${userData.name || 'guest'}!`);
           window.history.replaceState({}, '', '/');
           return;
         }
@@ -69,24 +69,24 @@ function AppContent() {
         let userData = null;
         if (isGoogle) {
           const code = params.get('code');
-          if (!code) throw new Error('РќРµ РїРѕР»СѓС‡РµРЅ code РѕС‚ Google');
+          if (!code) throw new Error('Google OAuth code is missing.');
           userData = await api.auth.loginWithGoogle(code);
         } else if (isVk) {
           const code = params.get('code');
-          if (!code) throw new Error('РќРµ РїРѕР»СѓС‡РµРЅ code РѕС‚ VK');
+          if (!code) throw new Error('VK OAuth code is missing.');
           const redirectUri = `${window.location.origin}/auth/vk/callback`;
           if (isLinkFlow) {
             const targetUserId = Number(state.split(':')[1] || 0);
-            if (!targetUserId) throw new Error('РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ state РїСЂРёРІСЏР·РєРё VK');
+            if (!targetUserId) throw new Error('Invalid VK link state.');
             await api.auth.linkVk(targetUserId, code, redirectUri);
-            toast.ok('VK СѓСЃРїРµС€РЅРѕ РїСЂРёРІСЏР·Р°РЅ');
+            toast.ok('VK account linked.');
             window.history.replaceState({}, '', '/');
             return;
           }
           userData = await api.auth.loginWithVk(code, redirectUri);
         } else if (isTelegram) {
           const tg = Object.fromEntries(params.entries());
-          if (!tg.id || !tg.hash || !tg.auth_date) throw new Error('РќРµРєРѕСЂСЂРµРєС‚РЅС‹Рµ РґР°РЅРЅС‹Рµ Telegram');
+          if (!tg.id || !tg.hash || !tg.auth_date) throw new Error('Telegram callback payload is invalid.');
           const tgPayload = {
             id: String(tg.id),
             first_name: tg.first_name || '',
@@ -98,21 +98,21 @@ function AppContent() {
           };
           if (isLinkFlow) {
             const targetUserId = Number(state.split(':')[1] || 0);
-            if (!targetUserId) throw new Error('РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ state РїСЂРёРІСЏР·РєРё Telegram');
+            if (!targetUserId) throw new Error('Invalid Telegram link state.');
             await api.auth.linkTelegram(targetUserId, tgPayload);
-            toast.ok('Telegram СѓСЃРїРµС€РЅРѕ РїСЂРёРІСЏР·Р°РЅ');
+            toast.ok('Telegram account linked.');
             window.history.replaceState({}, '', '/');
             return;
           }
           userData = await api.auth.loginWithTelegram(tgPayload);
         }
 
-        if (!userData) throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РІРµСЂС€РёС‚СЊ РІС…РѕРґ');
+        if (!userData) throw new Error('Could not complete login.');
         login(userData);
-        toast.ok(`Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ, ${userData.name || 'РіРѕСЃС‚СЊ'}!`);
+        toast.ok(`Welcome, ${userData.name || 'guest'}!`);
         window.history.replaceState({}, '', '/');
       } catch (e) {
-        toast.err(e.message || 'РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РІС…РѕРґ С‡РµСЂРµР· СЃРѕС†СЃРµС‚СЊ');
+        toast.err(e.message || 'Social login failed.');
         window.history.replaceState({}, '', '/');
       }
     };
@@ -193,15 +193,15 @@ function AppContent() {
         <div className="modal-ov">
           <div className="modal">
             <div className="m-hdr">
-              <div className="m-ttl">РћС€РёР±РєР°</div>
-              <button className="m-x" onClick={() => setModal(null)}>вњ•</button>
+              <div className="m-ttl">Error</div>
+              <button className="m-x" onClick={() => setModal(null)}>x</button>
             </div>
             <div className="m-body">
-              <p>Р”Р»СЏ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёСЏ РЅРµРѕР±С…РѕРґРёРјРѕ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ. РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РІРѕР№РґРёС‚Рµ РёР»Рё СЃРѕР·РґР°Р№С‚Рµ Р°РєРєР°СѓРЅС‚.</p>
+              <p>You need to sign in before creating a reservation.</p>
             </div>
             <div className="m-ftr">
-              <button className="btn btn-ghost" onClick={() => setModal('login')}>Р’РѕР№С‚Рё</button>
-              <button className="btn btn-gold" style={{ marginLeft: 8 }} onClick={() => setModal('register')}>Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ</button>
+              <button className="btn btn-ghost" onClick={() => setModal('login')}>Sign in</button>
+              <button className="btn btn-gold" style={{ marginLeft: 8 }} onClick={() => setModal('register')}>Register</button>
             </div>
           </div>
         </div>

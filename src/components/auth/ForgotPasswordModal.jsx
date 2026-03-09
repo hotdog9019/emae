@@ -16,7 +16,7 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
     setTimer(60);
     setCanResend(false);
     const interval = setInterval(() => {
-      setTimer(prev => {
+      setTimer((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
           setCanResend(true);
@@ -29,94 +29,89 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
 
   const handleSendCode = async () => {
     if (!phone) {
-      toast.err("Введите номер телефона");
+      toast.err('Enter phone number.');
       return;
     }
     setLoading(true);
-    // Имитация отправки SMS
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1000));
     setLoading(false);
     setStep('code');
     startTimer();
-    toast.ok("Код подтверждения отправлен в SMS");
+    toast.ok('Verification code sent by SMS.');
   };
 
   const handleVerifyCode = async () => {
     if (!code || code.length < 4) {
-      toast.err("Введите код из SMS");
+      toast.err('Enter code from SMS.');
       return;
     }
     setLoading(true);
-    // Имитация проверки кода
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 800));
     setLoading(false);
-    // Для демо принимаем любой 4-значный код
     setStep('newpass');
-    toast.ok("Код подтверждён, придумайте новый пароль");
+    toast.ok('Code verified. Set a new password.');
   };
 
   const handleResendCode = async () => {
     if (!canResend) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1000));
     setLoading(false);
     startTimer();
-    toast.ok("Новый код отправлен");
+    toast.ok('New code sent.');
   };
 
   const handleChangePassword = async () => {
     if (newPass.length < 6) {
-      toast.err("Пароль должен быть минимум 6 символов");
+      toast.err('Password must be at least 6 characters.');
       return;
     }
     if (newPass !== confirmPass) {
-      toast.err("Пароли не совпадают");
+      toast.err('Passwords do not match.');
       return;
     }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, 1200));
     setLoading(false);
-    toast.ok("Пароль успешно изменён! Теперь можно войти");
+    toast.ok('Password changed successfully.');
     onBackToLogin();
   };
 
   return (
-    <div className="modal-ov" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{maxWidth: "400px"}}>
+    <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: '400px' }}>
         <div className="m-hdr">
           <div className="m-ttl">
             <button className="back-btn" onClick={step === 'phone' ? onBackToLogin : () => setStep('phone')}>
               <Icons.ArrowLeft />
             </button>
-            <span className="ico">🔐</span>
-            Восстановление пароля
+            <span className="ico">*</span>
+            Password reset
           </div>
-          <button className="m-x" onClick={onClose}>✕</button>
+          <button className="m-x" onClick={onClose}>x</button>
         </div>
 
         <div className="m-body">
           {step === 'phone' && (
             <>
               <div className="fg">
-                <div className="fl"><Icons.Phone /> Номер телефона</div>
-                <input 
-                  className="fi" 
-                  type="tel" 
-                  placeholder="+7 (___) ___-__-__" 
-                  value={phone} 
-                  onChange={e => setPhone(fmtPhone(e.target.value))}
+                <div className="fl"><Icons.Phone /> Phone number</div>
+                <input
+                  className="fi"
+                  type="tel"
+                  placeholder="+7 (___) ___-__-__"
+                  value={phone}
+                  onChange={(e) => setPhone(fmtPhone(e.target.value))}
                   autoFocus
                 />
               </div>
-              <p className="hint-text">
-                На указанный номер будет отправлен код подтверждения
-              </p>
-              <button 
-                className="submit" 
-                onClick={handleSendCode} 
+              <p className="hint-text">We will send a verification code to this phone number.</p>
+              <button
+                className="submit"
+                onClick={handleSendCode}
                 disabled={loading || !phone}
               >
-                {loading ? "Отправка..." : "Получить код"}
+                {loading ? 'Sending...' : 'Get code'}
               </button>
             </>
           )}
@@ -124,36 +119,36 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
           {step === 'code' && (
             <>
               <div className="fg">
-                <div className="fl"><Icons.Lock /> Код из SMS</div>
-                <input 
-                  className="fi" 
-                  type="text" 
-                  placeholder="Введите 4-значный код" 
-                  value={code} 
-                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0,4))}
+                <div className="fl"><Icons.Lock /> SMS code</div>
+                <input
+                  className="fi"
+                  type="text"
+                  placeholder="Enter 4-digit code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   maxLength="4"
                   autoFocus
                 />
               </div>
               <div className="timer-row">
                 {!canResend ? (
-                  <span className="timer-text">Запросить код повторно через {timer} сек</span>
+                  <span className="timer-text">Request another code in {timer}s</span>
                 ) : (
-                  <button 
-                    className="resend-btn" 
+                  <button
+                    className="resend-btn"
                     onClick={handleResendCode}
                     disabled={loading}
                   >
-                    Отправить код повторно
+                    Resend code
                   </button>
                 )}
               </div>
-              <button 
-                className="submit" 
-                onClick={handleVerifyCode} 
+              <button
+                className="submit"
+                onClick={handleVerifyCode}
                 disabled={loading || code.length < 4}
               >
-                {loading ? "Проверка..." : "Подтвердить"}
+                {loading ? 'Checking...' : 'Confirm'}
               </button>
             </>
           )}
@@ -161,32 +156,32 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
           {step === 'newpass' && (
             <>
               <div className="fg">
-                <div className="fl"><Icons.Lock /> Новый пароль</div>
-                <input 
-                  className="fi" 
-                  type="password" 
-                  placeholder="Минимум 6 символов" 
-                  value={newPass} 
-                  onChange={e => setNewPass(e.target.value)}
+                <div className="fl"><Icons.Lock /> New password</div>
+                <input
+                  className="fi"
+                  type="password"
+                  placeholder="At least 6 characters"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
                   autoFocus
                 />
               </div>
               <div className="fg">
-                <div className="fl"><Icons.Lock /> Подтверждение</div>
-                <input 
-                  className="fi" 
-                  type="password" 
-                  placeholder="Повторите пароль" 
-                  value={confirmPass} 
-                  onChange={e => setConfirmPass(e.target.value)}
+                <div className="fl"><Icons.Lock /> Repeat password</div>
+                <input
+                  className="fi"
+                  type="password"
+                  placeholder="Repeat password"
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
                 />
               </div>
-              <button 
-                className="submit" 
-                onClick={handleChangePassword} 
+              <button
+                className="submit"
+                onClick={handleChangePassword}
                 disabled={loading || !newPass || !confirmPass}
               >
-                {loading ? "Сохраняем..." : "Сохранить новый пароль"}
+                {loading ? 'Saving...' : 'Save new password'}
               </button>
             </>
           )}
@@ -194,7 +189,7 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
 
         <div className="m-ftr">
           <p>
-            <button type="button" className="link-like" onClick={onBackToLogin}>← Вернуться ко входу</button>
+            <button type="button" className="link-like" onClick={onBackToLogin}>Back to login</button>
           </p>
         </div>
       </div>

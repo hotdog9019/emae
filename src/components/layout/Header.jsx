@@ -22,22 +22,22 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
   return (
     <header className={`hdr${scrolled ? ' compact' : ''}`}>
       <div className="brand">
-        <div className="brand-name">РЃРјР°С‘</div>
-        <div className="brand-sub">Р РµСЃС‚РѕСЂР°РЅ</div>
+        <div className="brand-name">Emae</div>
+        <div className="brand-sub">Restaurant</div>
       </div>
       <nav className="nav">
-        {['Р“Р»Р°РІРЅР°СЏ', 'РњРµРЅСЋ', 'Р РµР·РµСЂРІРёСЂРѕРІР°РЅРёРµ', 'РљРѕРЅС‚Р°РєС‚С‹'].map((n) => (
+        {['Home', 'Menu', 'Reserve', 'Contacts'].map((n) => (
           <button
             key={n}
             className={`nav-btn${
-              (n === 'Р“Р»Р°РІРЅР°СЏ' && page === 'home') ||
-              (n === 'РњРµРЅСЋ' && page === 'menu') ||
-              (n === 'РљРѕРЅС‚Р°РєС‚С‹' && page === 'contacts')
+              (n === 'Home' && page === 'home') ||
+              (n === 'Menu' && page === 'menu') ||
+              (n === 'Contacts' && page === 'contacts')
                 ? ' on'
                 : ''
             }`}
             onClick={() => {
-              if (n === 'Р РµР·РµСЂРІРёСЂРѕРІР°РЅРёРµ') {
+              if (n === 'Reserve') {
                 if (!user) {
                   setModal('reserve-error');
                   return;
@@ -45,11 +45,11 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
                 setModal('reserve');
                 return;
               }
-              if (n === 'РњРµРЅСЋ') {
+              if (n === 'Menu') {
                 setPage('menu');
                 return;
               }
-              if (n === 'РљРѕРЅС‚Р°РєС‚С‹') {
+              if (n === 'Contacts') {
                 setPage('contacts');
                 return;
               }
@@ -61,8 +61,13 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
         ))}
       </nav>
       <div className="hdr-right">
+        <button className="ico-btn" onClick={() => setCartOpen(true)} title="Cart">
+          <Icons.Cart />
+          {cartCount > 0 && <span className="dot" />}
+        </button>
+
         <div className="user-menu-right" ref={profileRef} style={{ position: 'relative' }}>
-          <button className="ico-btn" onClick={() => (user ? setShowProfile((s) => !s) : setModal('login'))} title={user ? 'РџСЂРѕС„РёР»СЊ' : 'Р’РѕР№С‚Рё'}>
+          <button className="ico-btn" onClick={() => (user ? setShowProfile((s) => !s) : setModal('login'))} title={user ? 'Profile' : 'Sign in'}>
             {user?.avatar_url ? (
               <img
                 src={user.avatar_url}
@@ -75,7 +80,7 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
           </button>
           {showProfile && user && (
             <div className="user-profile" style={{ position: 'absolute', right: 0, top: '100%', marginTop: 8 }}>
-              <div className="user-profile-header">РџСЂРёРІРµС‚, {user.name || user.username || 'РіРѕСЃС‚СЊ'}!</div>
+              <div className="user-profile-header">Hello, {user.name || user.username || 'guest'}!</div>
               <button
                 className="logout-btn"
                 style={{ marginBottom: 8 }}
@@ -84,7 +89,7 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
                   onOpenProfile && onOpenProfile();
                 }}
               >
-                Р›РёС‡РЅС‹Р№ РєР°Р±РёРЅРµС‚
+                Profile settings
               </button>
               <button
                 className="logout-btn"
@@ -93,7 +98,7 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
                   setShowProfile(false);
                 }}
               >
-                Р’С‹С…РѕРґ
+                Sign out
               </button>
             </div>
           )}

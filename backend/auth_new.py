@@ -592,6 +592,23 @@ def _frontend_public_url() -> str:
     return "http://localhost:3000"
 
 
+def _optional_telegram_bot_username() -> str:
+    username = (os.getenv("TELEGRAM_BOT_USERNAME") or os.getenv("REACT_APP_TELEGRAM_BOT_USERNAME") or "").strip().lstrip("@")
+    if username:
+        return username
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if token:
+        try:
+            req = urlrequest.Request(f"https://api.telegram.org/bot{token}/getMe", method="GET")
+            with urlrequest.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("ok") and (data.get("result") or {}).get("username"):
+                    return str(data["result"]["username"]).strip().lstrip("@")
+        except Exception:
+            return ""
+    return ""
+
+
 def _create_telegram_magic_token(db: Session, user: User) -> str:
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=10)
@@ -608,23 +625,25 @@ def _create_telegram_magic_token(db: Session, user: User) -> str:
 
 
 def _telegram_bot_username() -> str:
-    username = (os.getenv("TELEGRAM_BOT_USERNAME") or os.getenv("REACT_APP_TELEGRAM_BOT_USERNAME") or "").strip().lstrip("@")
+    username = _optional_telegram_bot_username()
     if username:
         return username
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    if token:
-        try:
-            req = urlrequest.Request(f"https://api.telegram.org/bot{token}/getMe", method="GET")
-            with urlrequest.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                if data.get("ok") and (data.get("result") or {}).get("username"):
-                    return str(data["result"]["username"]).strip().lstrip("@")
-        except Exception:
-            pass
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="TELEGRAM_BOT_USERNAME is not configured",
     )
+
+
+@router.get("/public-config")
+def auth_public_config():
+    google_client_id = (os.getenv("GOOGLE_CLIENT_ID") or os.getenv("REACT_APP_GOOGLE_CLIENT_ID") or "").strip()
+    vk_client_id = (os.getenv("VK_CLIENT_ID") or os.getenv("REACT_APP_VK_CLIENT_ID") or "").strip()
+    telegram_bot_username = _optional_telegram_bot_username()
+    return {
+        "google_client_id": google_client_id,
+        "vk_client_id": vk_client_id,
+        "telegram_bot_username": telegram_bot_username,
+    }
 
 
 def _create_telegram_bot_login_request(db: Session) -> str:
