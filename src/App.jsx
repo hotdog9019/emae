@@ -89,13 +89,13 @@ function AppContent() {
           if (!tg.id || !tg.hash || !tg.auth_date) throw new Error('Telegram callback payload is invalid.');
           const tgPayload = {
             id: String(tg.id),
-            first_name: tg.first_name || '',
-            last_name: tg.last_name || '',
-            username: tg.username || '',
-            photo_url: tg.photo_url || '',
             auth_date: Number(tg.auth_date),
             hash: tg.hash,
           };
+          if (tg.first_name) tgPayload.first_name = tg.first_name;
+          if (tg.last_name) tgPayload.last_name = tg.last_name;
+          if (tg.username) tgPayload.username = tg.username;
+          if (tg.photo_url) tgPayload.photo_url = tg.photo_url;
           if (isLinkFlow) {
             const targetUserId = Number(state.split(':')[1] || 0);
             if (!targetUserId) throw new Error('Invalid Telegram link state.');

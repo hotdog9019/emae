@@ -378,7 +378,11 @@ def _verify_telegram_auth(payload: TelegramAuthPayload) -> None:
 
     data = payload.model_dump()
     received_hash = data.pop("hash")
-    data_check_string = "\n".join([f"{k}={data[k]}" for k in sorted(data.keys()) if data[k] is not None])
+    # Telegram hash must be calculated only from fields that were actually sent.
+    # Empty optional values should not participate in data_check_string.
+    data_check_string = "\n".join(
+        [f"{k}={data[k]}" for k in sorted(data.keys()) if data[k] not in (None, "")]
+    )
     secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
     calc_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(calc_hash, received_hash):
