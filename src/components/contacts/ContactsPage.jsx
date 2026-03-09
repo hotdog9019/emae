@@ -131,7 +131,7 @@ export function ContactsPage({ toast }) {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .contacts-page {
           max-width: 1200px;
           margin: 0 auto;

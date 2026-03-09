@@ -199,7 +199,7 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .back-btn {
           background: none;
           border: none;

@@ -1,13 +1,41 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from database import engine, Base
 import auth_new as auth
 import reservations
 import restaurants
 import admin
+from Telegram import router as telegram_official_router
 import models
+import os
+from pathlib import Path
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from database import SessionLocal
+
+
+def load_dotenv_files():
+    candidates = [
+        Path(__file__).resolve().parent.parent / ".env",
+        Path(__file__).resolve().parent / ".env",
+    ]
+    for env_path in candidates:
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+load_dotenv_files()
 
 
 def seed_restaurants():
@@ -104,7 +132,71 @@ def seed_restaurants():
         db.close()
 
 # Создаем таблицы в БД
+def migrate_legacy_users_schema():
+    db: Session = SessionLocal()
+    try:
+        user_cols = {
+            row[1] for row in db.execute(text("PRAGMA table_info(users)")).fetchall()
+        }
+        if not user_cols:
+            return
+
+        if "name" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN name VARCHAR"))
+        if "password" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN password VARCHAR"))
+        if "role_id" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN role_id INTEGER"))
+        if "registration_date" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN registration_date DATETIME"))
+        if "birth_date" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN birth_date VARCHAR"))
+        if "email_verified" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN"))
+        if "telegram_id" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN telegram_id VARCHAR"))
+        if "telegram_username" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN telegram_username VARCHAR"))
+        if "telegram_photo_url" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN telegram_photo_url VARCHAR"))
+        if "vk_id" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN vk_id VARCHAR"))
+        if "vk_username" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN vk_username VARCHAR"))
+        if "vk_avatar_url" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN vk_avatar_url VARCHAR"))
+
+        user_cols = {
+            row[1] for row in db.execute(text("PRAGMA table_info(users)")).fetchall()
+        }
+
+        if "name" in user_cols:
+            if "username" in user_cols:
+                db.execute(text("UPDATE users SET name = COALESCE(name, username) WHERE name IS NULL OR TRIM(name) = ''"))
+            if "email" in user_cols:
+                db.execute(text("UPDATE users SET name = COALESCE(name, email) WHERE name IS NULL OR TRIM(name) = ''"))
+
+        if "password" in user_cols and "hashed_password" in user_cols:
+            db.execute(text("UPDATE users SET password = COALESCE(password, hashed_password) WHERE password IS NULL OR TRIM(password) = ''"))
+
+        if "role_id" in user_cols:
+            db.execute(text("UPDATE users SET role_id = 1 WHERE role_id IS NULL"))
+        if "email_verified" in user_cols:
+            db.execute(text("UPDATE users SET email_verified = COALESCE(email_verified, 0)"))
+
+        if "registration_date" in user_cols:
+            if "created_at" in user_cols:
+                db.execute(text("UPDATE users SET registration_date = COALESCE(registration_date, created_at, CURRENT_TIMESTAMP) WHERE registration_date IS NULL"))
+            else:
+                db.execute(text("UPDATE users SET registration_date = COALESCE(registration_date, CURRENT_TIMESTAMP) WHERE registration_date IS NULL"))
+
+        db.commit()
+    finally:
+        db.close()
+
+
 Base.metadata.create_all(bind=engine)
+migrate_legacy_users_schema()
 
 # Создаем приложение FastAPI
 app = FastAPI(
@@ -113,10 +205,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Добавляем CORS middleware для работы с фронтенд
+# Добавляем CORS middleware для работы с фронтендом
+frontend_origins = os.getenv(
+    "FRONTEND_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
+)
+allow_origins = [origin.strip() for origin in frontend_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшене измените на конкретные домены
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,6 +222,7 @@ app.add_middleware(
 
 # Подключаем роутеры
 app.include_router(auth.router)
+app.include_router(telegram_official_router)
 app.include_router(reservations.router)
 app.include_router(restaurants.router)
 app.include_router(admin.router)
@@ -132,11 +231,31 @@ app.include_router(admin.router)
 seed_restaurants()
 
 
+@app.on_event("startup")
+def startup_events():
+    if os.getenv("TELEGRAM_POLLING_AUTOSTART", "0") == "1":
+        try:
+            auth.start_telegram_polling()
+        except Exception:
+            # do not block API startup if telegram is unavailable
+            pass
+
+
+@app.on_event("shutdown")
+def shutdown_events():
+    try:
+        auth.stop_telegram_polling()
+    except Exception:
+        pass
+
+
 @app.get("/")
 def read_root():
-    """Главная страница API"""
+    # Root should serve the SPA when build artifacts exist.
+    if build_index.exists():
+        return FileResponse(str(build_index))
     return {
-        "message": "Добро пожаловать в Restaurant API",
+        "message": "Welcome to Restaurant API",
         "version": "1.0.0",
         "docs": "/docs",
         "openapi": "/openapi.json"
@@ -152,3 +271,25 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+# Serve frontend build from backend to avoid dev-server tunnel MIME/host issues.
+project_root = Path(__file__).resolve().parent.parent
+build_dir = project_root / "build"
+build_static = build_dir / "static"
+build_index = build_dir / "index.html"
+
+if build_static.exists():
+    app.mount("/static", StaticFiles(directory=str(build_static)), name="frontend-static")
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path in {"api", "docs", "openapi.json", "health"}:
+        raise HTTPException(status_code=404, detail="Not found")
+    if build_index.exists():
+        return FileResponse(str(build_index))
+    return {
+        "message": "Frontend build not found. Run `npm run build` in project root.",
+        "requested_path": full_path,
+    }
