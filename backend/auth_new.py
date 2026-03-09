@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-<<<<<<< HEAD
 from sqlalchemy import func as sa_func
 from database import get_db, SessionLocal
 from models import User, Role, Basket, EmailVerificationCode, TelegramLoginCode, TelegramLinkRequest, TelegramMagicLoginToken, TelegramBotLoginRequest, TelegramBotContact
@@ -838,32 +837,32 @@ def _process_telegram_message(db: Session, chat_id: str, tg_id: str, from_user: 
     if text.startswith("/me"):
         user = db.query(User).filter(User.telegram_id == tg_id).first() if _has("telegram_id") else None
         if user:
-            _send_telegram_message(chat_id, f"Привязан аккаунт: {getattr(user, 'name', '') or getattr(user, 'username', '') or user.id}")
+            _send_telegram_message(chat_id, f"РџСЂРёРІСЏР·Р°РЅ Р°РєРєР°СѓРЅС‚: {getattr(user, 'name', '') or getattr(user, 'username', '') or user.id}")
         else:
-            _send_telegram_message(chat_id, "К этому Telegram пока не привязан аккаунт.")
+            _send_telegram_message(chat_id, "Рљ СЌС‚РѕРјСѓ Telegram РїРѕРєР° РЅРµ РїСЂРёРІСЏР·Р°РЅ Р°РєРєР°СѓРЅС‚.")
         return
 
     if text.startswith("/otp"):
         parts = text.split(maxsplit=1)
         if len(parts) < 2 or not parts[1].strip():
-            _send_telegram_message(chat_id, "Использование: /otp <логин_или_@username>")
+            _send_telegram_message(chat_id, "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: /otp <Р»РѕРіРёРЅ_РёР»Рё_@username>")
             return
         login_value = parts[1].strip()
         user = _find_user_for_telegram_otp(db, login_value)
         if not user:
-            _send_telegram_message(chat_id, "Пользователь не найден или Telegram не привязан.")
+            _send_telegram_message(chat_id, "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ РёР»Рё Telegram РЅРµ РїСЂРёРІСЏР·Р°РЅ.")
             return
         if str(getattr(user, "telegram_id", "")) != tg_id:
-            _send_telegram_message(chat_id, "Этот Telegram не привязан к указанному аккаунту.")
+            _send_telegram_message(chat_id, "Р­С‚РѕС‚ Telegram РЅРµ РїСЂРёРІСЏР·Р°РЅ Рє СѓРєР°Р·Р°РЅРЅРѕРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.")
             return
         code = _create_telegram_otp(db, user)
-        _send_telegram_message(chat_id, f"Ваш код входа: <b>{code}</b>\nКод действителен 5 минут.")
+        _send_telegram_message(chat_id, f"Р’Р°С€ РєРѕРґ РІС…РѕРґР°: <b>{code}</b>\nРљРѕРґ РґРµР№СЃС‚РІРёС‚РµР»РµРЅ 5 РјРёРЅСѓС‚.")
         return
 
     if text == "/bind" or text.startswith("/bind "):
         parts = text.split(maxsplit=1)
         if len(parts) < 2 or not parts[1].strip():
-            _send_telegram_message(chat_id, "Использование: /bind CODE")
+            _send_telegram_message(chat_id, "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: /bind CODE")
             return
         bind_code = parts[1].strip().upper()
         req = (
@@ -876,21 +875,21 @@ def _process_telegram_message(db: Session, chat_id: str, tg_id: str, from_user: 
             .first()
         )
         if not req:
-            _send_telegram_message(chat_id, "Код привязки не найден.")
+            _send_telegram_message(chat_id, "РљРѕРґ РїСЂРёРІСЏР·РєРё РЅРµ РЅР°Р№РґРµРЅ.")
             return
         if req.expires_at.replace(tzinfo=timezone.utc) < datetime.now(tz=timezone.utc):
-            _send_telegram_message(chat_id, "Код привязки истек.")
+            _send_telegram_message(chat_id, "РљРѕРґ РїСЂРёРІСЏР·РєРё РёСЃС‚РµРє.")
             return
 
         user = db.query(User).filter(User.id == req.user_id).first()
         if not user:
-            _send_telegram_message(chat_id, "Пользователь для привязки не найден.")
+            _send_telegram_message(chat_id, "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РґР»СЏ РїСЂРёРІСЏР·РєРё РЅРµ РЅР°Р№РґРµРЅ.")
             return
 
         if _has("telegram_id"):
             existing = db.query(User).filter(User.telegram_id == tg_id, User.id != user.id).first()
             if existing:
-                _send_telegram_message(chat_id, "Этот Telegram уже привязан к другому аккаунту.")
+                _send_telegram_message(chat_id, "Р­С‚РѕС‚ Telegram СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РґСЂСѓРіРѕРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.")
                 return
             user.telegram_id = tg_id
         if _has("telegram_username"):
@@ -901,23 +900,23 @@ def _process_telegram_message(db: Session, chat_id: str, tg_id: str, from_user: 
         db.add(user)
         db.add(req)
         db.commit()
-        _send_telegram_message(chat_id, "Telegram успешно привязан к вашему аккаунту.")
+        _send_telegram_message(chat_id, "Telegram СѓСЃРїРµС€РЅРѕ РїСЂРёРІСЏР·Р°РЅ Рє РІР°С€РµРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.")
         return
 
     if text.startswith("/bindlogin"):
         parts = text.split(maxsplit=1)
         if len(parts) < 2 or not parts[1].strip():
-            _send_telegram_message(chat_id, "Использование: /bindlogin <логин_или_email>")
+            _send_telegram_message(chat_id, "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: /bindlogin <Р»РѕРіРёРЅ_РёР»Рё_email>")
             return
         login_value = parts[1].strip()
         user = _find_user_for_login(db, login_value)
         if not user:
-            _send_telegram_message(chat_id, "Пользователь не найден. Укажите логин или email от сайта.")
+            _send_telegram_message(chat_id, "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ. РЈРєР°Р¶РёС‚Рµ Р»РѕРіРёРЅ РёР»Рё email РѕС‚ СЃР°Р№С‚Р°.")
             return
         if _has("telegram_id"):
             existing = db.query(User).filter(User.telegram_id == tg_id, User.id != user.id).first()
             if existing:
-                _send_telegram_message(chat_id, "Этот Telegram уже привязан к другому аккаунту.")
+                _send_telegram_message(chat_id, "Р­С‚РѕС‚ Telegram СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РґСЂСѓРіРѕРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.")
                 return
             user.telegram_id = tg_id
         if _has("telegram_username"):
@@ -926,10 +925,10 @@ def _process_telegram_message(db: Session, chat_id: str, tg_id: str, from_user: 
             user.telegram_photo_url = user.telegram_photo_url or ""
         db.add(user)
         db.commit()
-        _send_telegram_message(chat_id, f"Готово. Telegram привязан к аккаунту {getattr(user, 'name', '') or getattr(user, 'username', '') or user.id}.")
+        _send_telegram_message(chat_id, f"Р“РѕС‚РѕРІРѕ. Telegram РїСЂРёРІСЏР·Р°РЅ Рє Р°РєРєР°СѓРЅС‚Сѓ {getattr(user, 'name', '') or getattr(user, 'username', '') or user.id}.")
         return
 
-    _send_telegram_message(chat_id, "Доступные команды:\n/start\n/me\n/otp <логин_или_@username>\n/bind <CODE>\n/bindlogin <логин_или_email>")
+    _send_telegram_message(chat_id, "Р”РѕСЃС‚СѓРїРЅС‹Рµ РєРѕРјР°РЅРґС‹:\n/start\n/me\n/otp <Р»РѕРіРёРЅ_РёР»Рё_@username>\n/bind <CODE>\n/bindlogin <Р»РѕРіРёРЅ_РёР»Рё_email>")
 
 
 def _set_telegram_webhook(url: str) -> dict:
@@ -1036,7 +1035,7 @@ def telegram_otp_request(payload: TelegramOtpRequest, db: Session = Depends(get_
 
     _send_telegram_message(
         str(user.telegram_id),
-        f"Ваш код входа: <b>{code}</b>\nКод действителен 5 минут.",
+        f"Р’Р°С€ РєРѕРґ РІС…РѕРґР°: <b>{code}</b>\nРљРѕРґ РґРµР№СЃС‚РІРёС‚РµР»РµРЅ 5 РјРёРЅСѓС‚.",
     )
     return {"message": "OTP sent to Telegram"}
 
@@ -1127,15 +1126,15 @@ def telegram_magic_request(payload: TelegramMagicRequest, db: Session = Depends(
     token = _create_telegram_magic_token(db, user)
     login_url = f"{_frontend_public_url()}/auth/telegram/magic?token={token}"
     message = (
-        "Запрос на вход в аккаунт.\n"
-        "Нажмите кнопку ниже, чтобы авторизоваться на сайте.\n\n"
-        "Ссылка действует 10 минут."
+        "Р—Р°РїСЂРѕСЃ РЅР° РІС…РѕРґ РІ Р°РєРєР°СѓРЅС‚.\n"
+        "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РЅРёР¶Рµ, С‡С‚РѕР±С‹ Р°РІС‚РѕСЂРёР·РѕРІР°С‚СЊСЃСЏ РЅР° СЃР°Р№С‚Рµ.\n\n"
+        "РЎСЃС‹Р»РєР° РґРµР№СЃС‚РІСѓРµС‚ 10 РјРёРЅСѓС‚."
     )
     try:
         _send_telegram_message_with_button(
             str(chat_id),
             message,
-            "Авторизоваться",
+            "РђРІС‚РѕСЂРёР·РѕРІР°С‚СЊСЃСЏ",
             login_url,
         )
         return {"message": "Telegram login message sent", "button": True}
@@ -1143,10 +1142,10 @@ def telegram_magic_request(payload: TelegramMagicRequest, db: Session = Depends(
         # Some Telegram clients/bot API validations reject local URLs in button markup.
         detail = str(getattr(e, "detail", "") or "")
         fallback_text = (
-            "Запрос на вход в аккаунт.\n"
-            "Кнопка сейчас недоступна, используйте ссылку ниже:\n"
+            "Р—Р°РїСЂРѕСЃ РЅР° РІС…РѕРґ РІ Р°РєРєР°СѓРЅС‚.\n"
+            "РљРЅРѕРїРєР° СЃРµР№С‡Р°СЃ РЅРµРґРѕСЃС‚СѓРїРЅР°, РёСЃРїРѕР»СЊР·СѓР№С‚Рµ СЃСЃС‹Р»РєСѓ РЅРёР¶Рµ:\n"
             f"{login_url}\n\n"
-            "Ссылка действует 10 минут."
+            "РЎСЃС‹Р»РєР° РґРµР№СЃС‚РІСѓРµС‚ 10 РјРёРЅСѓС‚."
         )
         _send_telegram_message(str(chat_id), fallback_text)
         return {"message": "Telegram login message sent (fallback link)", "button": False, "reason": detail}
@@ -1531,126 +1530,19 @@ def update_user_profile(user_id: int, profile: UserProfileUpdate, db: Session = 
     db.commit()
     db.refresh(user)
     return _profile_payload(user)
-=======
-from database import get_db
-from models import User, Role, Basket
-from schemas import UserRegister, UserLogin, UserResponse
-from utils import hash_password, verify_password
-
-router = APIRouter(prefix="/api/auth", tags=["authentication"])
-
-
-@router.post("/register", response_model=UserResponse)
-def register(user: UserRegister, db: Session = Depends(get_db)):
-    """Регистрация нового пользователя"""
-    
-    # Проверяем, существует ли пользователь с таким именем
-    existing_user = db.query(User).filter(User.name == user.name).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Пользователь с таким именем уже существует"
-        )
-    
-    # Проверяем, существует ли роль
-    role = db.query(Role).filter(Role.id == user.role_id).first()
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Роль не найдена"
-        )
-    
-    # Создаем нового пользователя
-    hashed_password = hash_password(user.password)
-    db_user = User(
-        name=user.name,
-        password=hashed_password,
-        role_id=user.role_id
-    )
-    
-    db.add(db_user)
-    db.flush()
-    
-    # Создаем корзину для пользователя
-    basket = Basket(user_id=db_user.id)
-    db.add(basket)
-    
-    db.commit()
-    db.refresh(db_user)
-    
-    return db_user
-
-
-@router.post("/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
-    """Вход пользователя"""
-    
-    # Ищем пользователя по имени
-    db_user = db.query(User).filter(User.name == user.name).first()
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверное имя или пароль"
-        )
-    
-    # Проверяем пароль
-    if not verify_password(user.password, db_user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверное имя или пароль"
-        )
-    
-    return {
-        "id": db_user.id,
-        "name": db_user.name,
-        "role_id": db_user.role_id,
-        "registration_date": db_user.registration_date,
-        "message": "Вход выполнен успешно"
-    }
-
-
-@router.get("/users/{user_id}", response_model=UserResponse)
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    """Получить информацию о пользователе"""
-    db_user = db.query(User).filter(User.id == user_id).first()
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден"
-        )
-    return db_user
->>>>>>> 09703f44760eb587a55c7a22b74466b36aff57a5
 
 
 @router.get("/users", response_model=list[UserResponse])
 def get_all_users(db: Session = Depends(get_db)):
-<<<<<<< HEAD
     users = db.query(User).all()
     return [_public_user_payload(u, "OK") for u in users]
-=======
-    """Получить всех пользователей"""
-    users = db.query(User).all()
-    return users
->>>>>>> 09703f44760eb587a55c7a22b74466b36aff57a5
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(user_id: int, db: Session = Depends(get_db)):
-<<<<<<< HEAD
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     db.delete(user)
-=======
-    """Удалить пользователя"""
-    db_user = db.query(User).filter(User.id == user_id).first()
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден"
-        )
-    
-    db.delete(db_user)
->>>>>>> 09703f44760eb587a55c7a22b74466b36aff57a5
     db.commit()
     return None

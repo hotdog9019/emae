@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000/api';
 
 export const api = {
@@ -17,12 +16,12 @@ export const api = {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || 'Ошибка регистрации');
+          throw new Error(err.detail || 'РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё');
         }
         return res.json();
       } catch (e) {
         if (e instanceof TypeError) {
-          throw new Error('Не удалось подключиться к серверу. Проверьте, запущен ли backend.');
+          throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє СЃРµСЂРІРµСЂСѓ. РџСЂРѕРІРµСЂСЊС‚Рµ, Р·Р°РїСѓС‰РµРЅ Р»Рё backend.');
         }
         throw e;
       }
@@ -37,12 +36,12 @@ export const api = {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || 'Неверный логин или пароль');
+          throw new Error(err.detail || 'РќРµРІРµСЂРЅС‹Р№ Р»РѕРіРёРЅ РёР»Рё РїР°СЂРѕР»СЊ');
         }
         return res.json();
       } catch (e) {
         if (e instanceof TypeError) {
-          throw new Error('Не удалось подключиться к серверу. Проверьте, запущен ли backend.');
+          throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє СЃРµСЂРІРµСЂСѓ. РџСЂРѕРІРµСЂСЊС‚Рµ, Р·Р°РїСѓС‰РµРЅ Р»Рё backend.');
         }
         throw e;
       }
@@ -57,12 +56,12 @@ export const api = {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || 'Ошибка входа через Google');
+          throw new Error(err.detail || 'РћС€РёР±РєР° РІС…РѕРґР° С‡РµСЂРµР· Google');
         }
         return res.json();
       } catch (e) {
         if (e instanceof TypeError) {
-          throw new Error('Не удалось подключиться к серверу. Проверьте, запущен ли backend.');
+          throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє СЃРµСЂРІРµСЂСѓ. РџСЂРѕРІРµСЂСЊС‚Рµ, Р·Р°РїСѓС‰РµРЅ Р»Рё backend.');
         }
         throw e;
       }
@@ -76,7 +75,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ошибка входа через VK');
+        throw new Error(err.detail || 'РћС€РёР±РєР° РІС…РѕРґР° С‡РµСЂРµР· VK');
       }
       return res.json();
     },
@@ -89,7 +88,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ошибка входа через Telegram');
+        throw new Error(err.detail || 'РћС€РёР±РєР° РІС…РѕРґР° С‡РµСЂРµР· Telegram');
       }
       return res.json();
     },
@@ -102,7 +101,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Не удалось отправить Telegram OTP');
+        throw new Error(err.detail || 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ Telegram OTP');
       }
       return res.json();
     },
@@ -115,7 +114,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Не удалось отправить сообщение в Telegram');
+        throw new Error(err.detail || 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РІ Telegram');
       }
       return res.json();
     },
@@ -127,7 +126,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Не удалось запустить вход через Telegram');
+        throw new Error(err.detail || 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ РІС…РѕРґ С‡РµСЂРµР· Telegram');
       }
       return res.json();
     },
@@ -140,7 +139,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ссылка входа недействительна');
+        throw new Error(err.detail || 'РЎСЃС‹Р»РєР° РІС…РѕРґР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅР°');
       }
       return res.json();
     },
@@ -153,7 +152,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Неверный Telegram OTP');
+        throw new Error(err.detail || 'РќРµРІРµСЂРЅС‹Р№ Telegram OTP');
       }
       return res.json();
     },
@@ -166,7 +165,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ошибка привязки Telegram');
+        throw new Error(err.detail || 'РћС€РёР±РєР° РїСЂРёРІСЏР·РєРё Telegram');
       }
       return res.json();
     },
@@ -179,7 +178,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Не удалось создать код привязки');
+        throw new Error(err.detail || 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РєРѕРґ РїСЂРёРІСЏР·РєРё');
       }
       return res.json();
     },
@@ -188,7 +187,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/auth/telegram/link/status/${userId}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Не удалось получить статус привязки Telegram');
+        throw new Error(err.detail || 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃС‚Р°С‚СѓСЃ РїСЂРёРІСЏР·РєРё Telegram');
       }
       return res.json();
     },
@@ -201,14 +200,14 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ошибка привязки VK');
+        throw new Error(err.detail || 'РћС€РёР±РєР° РїСЂРёРІСЏР·РєРё VK');
       }
       return res.json();
     },
 
     getUser: async (userId) => {
       const res = await fetch(`${API_BASE}/auth/users/${userId}`);
-      if (!res.ok) throw new Error('Ошибка получения профиля');
+      if (!res.ok) throw new Error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РїСЂРѕС„РёР»СЏ');
       return res.json();
     },
 
@@ -216,7 +215,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/auth/users/${userId}/profile`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ошибка загрузки профиля');
+        throw new Error(err.detail || 'РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РїСЂРѕС„РёР»СЏ');
       }
       return res.json();
     },
@@ -229,7 +228,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Ошибка сохранения профиля');
+        throw new Error(err.detail || 'РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РїСЂРѕС„РёР»СЏ');
       }
       return res.json();
     },
@@ -242,7 +241,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Не удалось отправить код');
+        throw new Error(err.detail || 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РєРѕРґ');
       }
       return res.json();
     },
@@ -255,7 +254,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Неверный код подтверждения');
+        throw new Error(err.detail || 'РќРµРІРµСЂРЅС‹Р№ РєРѕРґ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ');
       }
       return res.json();
     }
@@ -281,13 +280,13 @@ export const api = {
 
         if (!res.ok) {
           const err = await res.json().catch(async () => ({ detail: await res.text().catch(() => res.statusText) }));
-          throw new Error(err.detail || 'Ошибка создания бронирования');
+          throw new Error(err.detail || 'РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёСЏ');
         }
 
         return res.json();
       } catch (e) {
         if (e instanceof TypeError) {
-          throw new Error(`Не удалось подключиться к серверу. Проверьте, что backend доступен по ${API_BASE}`);
+          throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє СЃРµСЂРІРµСЂСѓ. РџСЂРѕРІРµСЂСЊС‚Рµ, С‡С‚Рѕ backend РґРѕСЃС‚СѓРїРµРЅ РїРѕ ${API_BASE}`);
         }
         throw e;
       }
@@ -295,13 +294,13 @@ export const api = {
 
     getUserReservations: async (userId) => {
       const res = await fetch(`${API_BASE}/reservations/user/${userId}`);
-      if (!res.ok) throw new Error('Ошибка получения бронирований');
+      if (!res.ok) throw new Error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёР№');
       return res.json();
     },
 
     getAll: async () => {
       const res = await fetch(`${API_BASE}/reservations/`);
-      if (!res.ok) throw new Error('Ошибка получения бронирований');
+      if (!res.ok) throw new Error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёР№');
       return res.json();
     }
   },
@@ -309,128 +308,14 @@ export const api = {
   restaurants: {
     list: async () => {
       const res = await fetch(`${API_BASE}/restaurants/`);
-      if (!res.ok) throw new Error('Ошибка получения списка ресторанов');
+      if (!res.ok) throw new Error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СЃРїРёСЃРєР° СЂРµСЃС‚РѕСЂР°РЅРѕРІ');
       return res.json();
     },
 
     tables: async (restaurantId) => {
       const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/tables`);
-      if (!res.ok) throw new Error('Ошибка получения столиков');
+      if (!res.ok) throw new Error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СЃС‚РѕР»РёРєРѕРІ');
       return res.json();
     }
   }
-=======
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000/api';
-
-export const api = {
-  auth: {
-    register: async (name, password, roleId = 1) => {
-      try {
-        const res = await fetch(`${API_BASE}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            password,
-            role_id: roleId
-          })
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || 'Ошибка регистрации');
-        }
-        return res.json();
-      } catch (e) {
-        if (e instanceof TypeError) {
-          throw new Error('Не удалось подключиться к серверу. Проверьте, запущен ли backend на http://localhost:8000');
-        }
-        throw e;
-      }
-    },
-
-    login: async (name, password) => {
-      try {
-        const res = await fetch(`${API_BASE}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, password })
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || 'Неверный email или пароль');
-        }
-        return res.json();
-      } catch (e) {
-        if (e instanceof TypeError) {
-          throw new Error('Не удалось подключиться к серверу. Проверьте, запущен ли backend на http://localhost:8000');
-        }
-        throw e;
-      }
-    },
-
-    getUser: async (userId) => {
-      const res = await fetch(`${API_BASE}/auth/users/${userId}`);
-      if (!res.ok) throw new Error('Ошибка получения профиля');
-      return res.json();
-    }
-  },
-
-  reservations: {
-    create: async (userId, email, phone, date, time, guests, specialRequests, restaurantId = null, tableId = null) => {
-      try {
-        const res = await fetch(`${API_BASE}/reservations/?user_id=${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            phone,
-            date,
-            time,
-            guests,
-            special_requests: specialRequests,
-            restaurant_id: restaurantId,
-            table_id: tableId
-          })
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(async () => ({ detail: await res.text().catch(() => res.statusText) }));
-          throw new Error(err.detail || 'Ошибка создания бронирования');
-        }
-
-        return res.json();
-      } catch (e) {
-        if (e instanceof TypeError) {
-          throw new Error(`Не удалось подключиться к серверу. Проверьте, что backend доступен по ${API_BASE}`);
-        }
-        throw e;
-      }
-    },
-
-    getUserReservations: async (userId) => {
-      const res = await fetch(`${API_BASE}/reservations/user/${userId}`);
-      if (!res.ok) throw new Error('Ошибка получения бронирований');
-      return res.json();
-    }
-    ,
-    getAll: async () => {
-      const res = await fetch(`${API_BASE}/reservations/`);
-      if (!res.ok) throw new Error('Ошибка получения бронирингов');
-      return res.json();
-    }
-  }
-  ,
-  restaurants: {
-    list: async () => {
-      const res = await fetch(`${API_BASE}/restaurants/`);
-      if (!res.ok) throw new Error('Ошибка получения списка ресторанов');
-      return res.json();
-    },
-    tables: async (restaurantId) => {
-      const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/tables`);
-      if (!res.ok) throw new Error('Ошибка получения столиков');
-      return res.json();
-    }
-  }
->>>>>>> 09703f44760eb587a55c7a22b74466b36aff57a5
 };
