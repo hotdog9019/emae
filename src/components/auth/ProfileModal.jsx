@@ -8,8 +8,6 @@ export function ProfileModal({ onClose, toast }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emailCode, setEmailCode] = useState('');
-  const [telegramLinkCode, setTelegramLinkCode] = useState('');
-  const [telegramLinkExpires, setTelegramLinkExpires] = useState('');
   const [profile, setProfile] = useState(null);
   const [vkClientId, setVkClientId] = useState('');
   const [form, setForm] = useState({
@@ -133,38 +131,6 @@ export function ProfileModal({ onClose, toast }) {
     window.location.href = `https://oauth.vk.com/authorize?${params.toString()}`;
   };
 
-  const createTelegramLinkCode = async () => {
-    if (!user?.id) return;
-    try {
-      const resp = await api.auth.requestTelegramLinkCode(user.id, profile?.telegram_username || '');
-      if (resp.already_linked) {
-        toast.ok(`Telegram is already linked: @${resp.telegram_username || ''}`);
-        return;
-      }
-      setTelegramLinkCode(resp.code || '');
-      setTelegramLinkExpires(resp.expires_at || '');
-      toast.ok('Telegram link code created.');
-    } catch (e) {
-      toast.err(e.message || 'Failed to create Telegram link code.');
-    }
-  };
-
-  const checkTelegramLinkStatus = async () => {
-    if (!user?.id) return;
-    try {
-      const st = await api.auth.getTelegramLinkStatus(user.id);
-      if (st.linked) {
-        const refreshed = await api.auth.getProfile(user.id);
-        setProfile(refreshed);
-        toast.ok(`Telegram linked: @${st.telegram_username || ''}`);
-      } else {
-        toast.info('Telegram is not linked yet.');
-      }
-    } catch (e) {
-      toast.err(e.message || 'Failed to check Telegram status.');
-    }
-  };
-
   return (
     <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -219,28 +185,12 @@ export function ProfileModal({ onClose, toast }) {
               <div className="fg">
                 <div className="fl">Social accounts</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="button" className="btn btn-ghost" onClick={createTelegramLinkCode}>
-                    {profile?.telegram_username ? `Telegram: @${profile.telegram_username}` : 'Link Telegram'}
-                  </button>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    Telegram linking via bot is disabled.
+                  </div>
                   <button type="button" className="btn btn-ghost" onClick={connectVk}>
                     {profile?.vk_username ? `VK: ${profile.vk_username}` : 'Link VK'}
                   </button>
-                </div>
-                <div style={{ marginTop: 8, padding: 8, border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
-                    Telegram fallback link flow (works without Telegram web widget domain setup).
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button type="button" className="btn btn-ghost" onClick={createTelegramLinkCode}>Generate code</button>
-                    <button type="button" className="btn btn-outline-gold" onClick={checkTelegramLinkStatus}>Check status</button>
-                  </div>
-                  {telegramLinkCode && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text)' }}>
-                      Code: <b>{telegramLinkCode}</b><br />
-                      In Telegram bot send: <b>/bind {telegramLinkCode}</b>
-                      {telegramLinkExpires ? <><br />Expires at: {telegramLinkExpires}</> : null}
-                    </div>
-                  )}
                 </div>
               </div>
 

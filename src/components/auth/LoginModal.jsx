@@ -3,12 +3,13 @@ import { Icons } from '../icons/Icons';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 import { OfficialTelegramLogin } from '../../Telegram/OfficialTelegramLogin';
+import { VkIdLogin } from './VkIdLogin';
 
 export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
   const [name, setName] = useState('');
   const [pass, setPass] = useState('');
-  const [telegramName, setTelegramName] = useState('');
-  const [showTelegramByUsername, setShowTelegramByUsername] = useState(false);
+  const [showTelegramWidget, setShowTelegramWidget] = useState(false);
+  const [showVkWidget, setShowVkWidget] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthConfig, setOauthConfig] = useState({
     google_client_id: '',
@@ -86,23 +87,6 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
     window.location.href = `https://oauth.vk.com/authorize?${params.toString()}`;
   };
 
-  const handleTelegramByUsername = async () => {
-    const value = telegramName.trim();
-    if (!value) {
-      toast.err('Enter Telegram username, for example @myname.');
-      return;
-    }
-    setLoading(true);
-    try {
-      await api.auth.requestTelegramMagic(value);
-      toast.ok('Login message sent to your Telegram bot chat.');
-    } catch (err) {
-      toast.err(err.message || 'Failed to send Telegram login message');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -135,44 +119,64 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
           <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
             <div style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: 10, fontSize: 12 }}>Other sign-in methods</div>
 
-            <div style={{ display: 'grid', gap: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <OfficialTelegramLogin />
-              </div>
-              <button type="button" className="btn btn-ghost" style={{ justifyContent: 'center' }} onClick={handleGoogleLogin} disabled={loading}>Google</button>
-              <button type="button" className="btn btn-ghost" style={{ justifyContent: 'center' }} onClick={handleVkLogin} disabled={loading}>VK</button>
+            <div className="social-row" onClick={() => { if (showTelegramWidget) setShowTelegramWidget(false); if (showVkWidget) setShowVkWidget(false); }}>
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ justifyContent: 'center' }}
-                onClick={() => setShowTelegramByUsername((s) => !s)}
+                className="social-btn social-telegram"
+                aria-label="Sign in with Telegram"
+                onClick={(e) => { e.stopPropagation(); setShowTelegramWidget((s) => !s); setShowVkWidget(false); }}
                 disabled={loading}
               >
-                Telegram (via @username)
+                <Icons.Telegram />
               </button>
-            </div>
+              <button
+                type="button"
+                className="social-btn social-google"
+                aria-label="Sign in with Google"
+                onClick={(e) => { e.stopPropagation(); handleGoogleLogin(); }}
+                disabled={loading}
+              >
+                <Icons.Google />
+              </button>
+              <button
+                type="button"
+                className="social-btn social-vk"
+                aria-label="Sign in with VK"
+                onClick={(e) => { e.stopPropagation(); setShowVkWidget((s) => !s); setShowTelegramWidget(false); }}
+                disabled={loading}
+              >
+                <Icons.VK />
+              </button>
 
-            {showTelegramByUsername && (
-              <div style={{ marginTop: 12, padding: 10, border: '1px solid var(--border2)', borderRadius: 10 }}>
-                <div className="fl">Fallback login via Telegram message</div>
-                <input
-                  className="fi"
-                  type="text"
-                  placeholder="@telegram_username"
-                  value={telegramName}
-                  onChange={(e) => setTelegramName(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-outline-gold"
-                  style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
-                  onClick={handleTelegramByUsername}
-                  disabled={loading || !telegramName.trim()}
-                >
-                  Send Telegram login message
-                </button>
-              </div>
-            )}
+              {showTelegramWidget && (
+                <div className="social-popover" onClick={(e) => e.stopPropagation()}>
+                  <div className="social-popover-title">Telegram sign in</div>
+                  <div className="social-popover-body">
+                    <OfficialTelegramLogin />
+                  </div>
+                  <button type="button" className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 10 }} onClick={() => setShowTelegramWidget(false)}>
+                    Close
+                  </button>
+                </div>
+              )}
+
+              {showVkWidget && (
+                <div className="social-popover" onClick={(e) => e.stopPropagation()}>
+                  <div className="social-popover-title">VK sign in</div>
+                  <div className="social-popover-body">
+                    <VkIdLogin onLogin={login} onClose={() => setShowVkWidget(false)} toast={toast} />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline-gold"
+                    style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}
+                    onClick={() => handleVkLogin()}
+                  >
+                    Use classic VK OAuth
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="forgot-row">

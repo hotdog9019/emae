@@ -84,6 +84,16 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;b
 .btn-hero-ghost{padding:13px 28px;border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.22);background:transparent;color:var(--text);font-size:10px;letter-spacing:2px;}
 .btn-hero-ghost:hover{border-color:var(--gold);color:var(--gold);}
 
+/* Social auth */
+.social-row{position:relative;display:flex;align-items:center;justify-content:center;gap:12px;padding:6px 0;}
+.social-btn{width:52px;height:52px;border-radius:50%;border:1px solid var(--border2);background:rgba(0,0,0,.35);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s var(--ease);box-shadow:0 10px 22px rgba(0,0,0,.25);}
+.social-btn svg{display:block;}
+.social-btn:hover:not(:disabled){border-color:var(--gold);background:var(--gold-glow);transform:translateY(-1px) scale(1.04);color:var(--gold2);}
+.social-btn:disabled{opacity:.45;cursor:not-allowed;}
+.social-popover{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);width:min(340px,92vw);background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.75);z-index:20;animation:modalIn .35s var(--ease);}
+.social-popover-title{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;text-align:center;}
+.social-popover-body{display:flex;justify-content:center;min-height:44px;}
+
 /* BOTTOM BAR */
 .btm{background:rgba(8,8,7,.96);backdrop-filter:blur(20px);border-top:1px solid var(--border);padding:14px 48px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .btm-left{display:flex;align-items:center;gap:12px;}
@@ -218,5 +228,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;b
 @media(max-width:540px){
   .menu-grid{grid-template-columns:1fr;}.fi-row{flex-direction:column;gap:0;}
   .btm-left{flex-wrap:wrap;gap:8px;}.v-div{display:none;}
+  .social-btn{width:56px;height:56px;}
 }
 `;

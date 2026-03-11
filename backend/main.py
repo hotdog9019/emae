@@ -231,24 +231,6 @@ app.include_router(admin.router)
 seed_restaurants()
 
 
-@app.on_event("startup")
-def startup_events():
-    if os.getenv("TELEGRAM_POLLING_AUTOSTART", "0") == "1":
-        try:
-            auth.start_telegram_polling()
-        except Exception:
-            # do not block API startup if telegram is unavailable
-            pass
-
-
-@app.on_event("shutdown")
-def shutdown_events():
-    try:
-        auth.stop_telegram_polling()
-    except Exception:
-        pass
-
-
 @app.get("/")
 def read_root():
     # Root should serve the SPA when build artifacts exist.

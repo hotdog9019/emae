@@ -37,23 +37,12 @@ function AppContent() {
     const handleSocialCallback = async () => {
       try {
         const { pathname, search } = window.location;
-        const isTelegramMagic = pathname === '/auth/telegram/magic';
         const isGoogle = pathname === '/auth/google/callback';
         const isVk = pathname === '/auth/vk/callback';
         const isTelegram = pathname === '/auth/telegram/callback';
-        if (!isTelegramMagic && !isGoogle && !isVk && !isTelegram) return;
+        if (!isGoogle && !isVk && !isTelegram) return;
 
         const params = new URLSearchParams(search);
-        if (isTelegramMagic) {
-          const token = (params.get('token') || '').trim();
-          if (!token) throw new Error('Telegram login token is missing.');
-          const userData = await api.auth.consumeTelegramMagic(token);
-          login(userData);
-          toast.ok(`Welcome, ${userData.name || 'guest'}!`);
-          window.history.replaceState({}, '', '/');
-          return;
-        }
-
         const payloadKey = isGoogle || isVk ? (params.get('code') || '') : search;
         if (!payloadKey) return;
         const state = params.get('state') || '';

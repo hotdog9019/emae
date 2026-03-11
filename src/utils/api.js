@@ -75,44 +75,17 @@ export const api = {
       });
     },
 
+    loginWithVkid: async (accessToken, userId, email = undefined) => {
+      return requestJson('/auth/vkid/login', {
+        method: 'POST',
+        body: { access_token: accessToken, user_id: String(userId || ''), email },
+      });
+    },
+
     loginWithTelegram: async (telegramAuthData) => {
       return requestJson('/auth/telegram/callback', {
         method: 'POST',
         body: telegramAuthData,
-      });
-    },
-
-    requestTelegramOtp: async (name) => {
-      return requestJson('/auth/telegram/otp/request', {
-        method: 'POST',
-        body: { name },
-      });
-    },
-
-    confirmTelegramOtp: async (name, code) => {
-      return requestJson('/auth/telegram/otp/confirm', {
-        method: 'POST',
-        body: { name, code },
-      });
-    },
-
-    requestTelegramMagic: async (name) => {
-      return requestJson('/auth/telegram/magic/request', {
-        method: 'POST',
-        body: { name },
-      });
-    },
-
-    consumeTelegramMagic: async (token) => {
-      return requestJson('/auth/telegram/magic/consume', {
-        method: 'POST',
-        body: { token },
-      });
-    },
-
-    startTelegramBotLogin: async () => {
-      return requestJson('/auth/telegram/bot-login/start', {
-        method: 'POST',
       });
     },
 
@@ -121,17 +94,6 @@ export const api = {
         method: 'POST',
         body: { user_id: userId, ...telegramAuthData },
       });
-    },
-
-    requestTelegramLinkCode: async (userId, telegramUsername = '') => {
-      return requestJson('/auth/telegram/link/request', {
-        method: 'POST',
-        body: { user_id: userId, telegram_username: telegramUsername },
-      });
-    },
-
-    getTelegramLinkStatus: async (userId) => {
-      return requestJson(`/auth/telegram/link/status/${userId}`);
     },
 
     linkVk: async (userId, code, redirectUri) => {
