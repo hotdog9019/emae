@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import base64
 import json
 import os
+from pathlib import Path
 import ssl
 import time
 import uuid
@@ -21,6 +22,14 @@ class AiReplyOptions(BaseModel):
 
 
 _token_cache = {"token": None, "expires_at": 0}
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _resolve_fs_path(value: str) -> str:
+    p = Path(value)
+    if not p.is_absolute():
+        p = _PROJECT_ROOT / p
+    return str(p)
 
 
 def _now_ts() -> int:
@@ -41,12 +50,31 @@ def _is_admin(user: User, db: Session) -> bool:
 
 
 def _ssl_context() -> ssl.SSLContext:
-    ctx = ssl.create_default_context()
     verify = (os.getenv("GIGACHAT_VERIFY_SSL") or "1").strip().lower()
     if verify in {"0", "false", "no", "off"}:
+        ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-    return ctx
+        return ctx
+
+    cafile = (os.getenv("GIGACHAT_CA_FILE") or "").strip()
+    if cafile:
+        cafile_resolved = _resolve_fs_path(cafile)
+        if not Path(cafile_resolved).exists():
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"GigaChat SSL: CA file not found: {cafile_resolved}",
+            )
+        try:
+            ctx = ssl.create_default_context(cafile=cafile_resolved)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"GigaChat SSL: could not load CA file: {e}",
+            )
+        return ctx
+
+    return ssl.create_default_context()
 
 
 def _gigachat_get_token() -> str:

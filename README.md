@@ -32,7 +32,7 @@ npm start
    - **или** пару `GIGACHAT_CLIENT_ID` / `GIGACHAT_CLIENT_SECRET` (бэкенд сам соберёт Basic)
    - **или** `GIGACHAT_ACCESS_TOKEN` (тогда токен придётся обновлять вручную, обычно раз в ~30 минут)
 3) При необходимости поправь `GIGACHAT_SCOPE`, `GIGACHAT_MODEL`, `GIGACHAT_OAUTH_URL`, `GIGACHAT_API_URL` (актуальные значения смотри в документации GigaChat)
-   - Если словишь SSL-ошибки, сначала поставь нормальные сертификаты. `GIGACHAT_VERIFY_SSL=0` оставил только как аварийный dev‑флаг (не для продакшена).
+   - Если словишь SSL-ошибки, сначала поставь нормальные сертификаты (или укажи CA-файл через `GIGACHAT_CA_FILE`). `GIGACHAT_VERIFY_SSL=0` оставил только как аварийный dev‑флаг (не для продакшена).
 4) Перезапусти backend
 
 ### Как вручную получить Access Token (если нужно)
