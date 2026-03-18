@@ -5,6 +5,7 @@ from database import get_db
 from models import SupportThread, SupportMessage, User, Role
 from datetime import datetime
 from urllib import request as urlrequest
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 import base64
 import json
@@ -32,6 +33,25 @@ def _resolve_fs_path(value: str) -> str:
     return str(p)
 
 
+def _looks_like_uuid(value: str) -> bool:
+    try:
+        uuid.UUID((value or "").strip())
+        return True
+    except Exception:
+        return False
+
+
+def _looks_like_base64_uuid_pair(value: str) -> bool:
+    try:
+        decoded = base64.b64decode((value or "").strip(), validate=True).decode("utf-8")
+    except Exception:
+        return False
+    if ":" not in decoded:
+        return False
+    left, right = decoded.split(":", 1)
+    return _looks_like_uuid(left) and _looks_like_uuid(right)
+
+
 def _format_gigachat_urlopen_error(e: Exception) -> str:
     msg = str(e)
     if "CERTIFICATE_VERIFY_FAILED" in msg or "certificate verify failed" in msg:
@@ -44,6 +64,13 @@ def _format_gigachat_urlopen_error(e: Exception) -> str:
             "or (dev only) disable verification via GIGACHAT_VERIFY_SSL=0. "
             f"Current: GIGACHAT_VERIFY_SSL={verify}, {ca_note}. "
             f"Original error: {msg}"
+        )
+    if "HTTP Error 401" in msg or "HTTP Error 403" in msg:
+        return (
+            f"{msg}. "
+            "Check credentials: "
+            "GIGACHAT_ACCESS_TOKEN must be an OAuth access_token (short-lived), "
+            "while GIGACHAT_AUTHORIZATION_KEY is base64(client_id:client_secret)."
         )
     return msg
 
@@ -101,17 +128,24 @@ def _ssl_context() -> ssl.SSLContext:
     return ctx
 
 
-def _gigachat_get_token() -> str:
+def _gigachat_get_token(force_refresh: bool = False) -> str:
     token_env = (os.getenv("GIGACHAT_ACCESS_TOKEN") or "").strip()
-    if token_env:
+
+    # If the base64(client_id:client_secret) authorization key is mistakenly placed
+    # into GIGACHAT_ACCESS_TOKEN, do not treat it as a Bearer token.
+    token_env_is_basic = bool(token_env and _looks_like_base64_uuid_pair(token_env))
+    if token_env and not token_env_is_basic:
         return token_env
 
-    cached = _token_cache.get("token")
-    exp = int(_token_cache.get("expires_at") or 0)
-    if cached and exp > _now_ts() + 15:
-        return cached
+    if not force_refresh:
+        cached = _token_cache.get("token")
+        exp = int(_token_cache.get("expires_at") or 0)
+        if cached and exp > _now_ts() + 15:
+            return cached
 
     authorization_key = (os.getenv("GIGACHAT_AUTHORIZATION_KEY") or "").strip()
+    if not authorization_key and token_env_is_basic:
+        authorization_key = token_env
     if authorization_key.lower().startswith("basic "):
         authorization_key = authorization_key[6:].strip()
 
@@ -212,10 +246,32 @@ def _gigachat_chat(messages: list[dict], temperature: float | None = None) -> st
         "Accept": "application/json",
     }
     data = json.dumps(req_payload, ensure_ascii=False).encode("utf-8")
-    req = urlrequest.Request(api_url, data=data, headers=headers, method="POST")
     try:
+        req = urlrequest.Request(api_url, data=data, headers=headers, method="POST")
         with urlrequest.urlopen(req, timeout=35, context=_ssl_context()) as resp:
             raw = resp.read().decode("utf-8")
+    except HTTPError as e:
+        token_env = (os.getenv("GIGACHAT_ACCESS_TOKEN") or "").strip()
+        using_static_token = bool(token_env and not _looks_like_base64_uuid_pair(token_env))
+        if getattr(e, "code", None) == 401 and not using_static_token:
+            _token_cache["token"] = None
+            _token_cache["expires_at"] = 0
+            token2 = _gigachat_get_token(force_refresh=True)
+            headers["Authorization"] = f"Bearer {token2}"
+            try:
+                req2 = urlrequest.Request(api_url, data=data, headers=headers, method="POST")
+                with urlrequest.urlopen(req2, timeout=35, context=_ssl_context()) as resp:
+                    raw = resp.read().decode("utf-8")
+            except Exception as e2:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"GigaChat request error: {_format_gigachat_urlopen_error(e2)}",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"GigaChat request error: {_format_gigachat_urlopen_error(e)}",
+            )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
