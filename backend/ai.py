@@ -32,6 +32,22 @@ def _resolve_fs_path(value: str) -> str:
     return str(p)
 
 
+def _format_gigachat_urlopen_error(e: Exception) -> str:
+    msg = str(e)
+    if "CERTIFICATE_VERIFY_FAILED" in msg or "certificate verify failed" in msg:
+        ca_file = (os.getenv("GIGACHAT_CA_FILE") or "").strip()
+        verify = (os.getenv("GIGACHAT_VERIFY_SSL") or "1").strip()
+        ca_note = f"GIGACHAT_CA_FILE={ca_file}" if ca_file else "GIGACHAT_CA_FILE is not set"
+        return (
+            "SSL verify failed while calling GigaChat. "
+            "Fix: provide a trusted CA bundle (set GIGACHAT_CA_FILE to a PEM file), "
+            "or (dev only) disable verification via GIGACHAT_VERIFY_SSL=0. "
+            f"Current: GIGACHAT_VERIFY_SSL={verify}, {ca_note}. "
+            f"Original error: {msg}"
+        )
+    return msg
+
+
 def _now_ts() -> int:
     return int(time.time())
 
@@ -51,30 +67,38 @@ def _is_admin(user: User, db: Session) -> bool:
 
 def _ssl_context() -> ssl.SSLContext:
     verify = (os.getenv("GIGACHAT_VERIFY_SSL") or "1").strip().lower()
+    ctx = ssl.create_default_context()
     if verify in {"0", "false", "no", "off"}:
-        ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
 
     cafile = (os.getenv("GIGACHAT_CA_FILE") or "").strip()
     if cafile:
-        cafile_resolved = _resolve_fs_path(cafile)
-        if not Path(cafile_resolved).exists():
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GigaChat SSL: CA file not found: {cafile_resolved}",
-            )
-        try:
-            ctx = ssl.create_default_context(cafile=cafile_resolved)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GigaChat SSL: could not load CA file: {e}",
-            )
-        return ctx
+        for part in [p.strip() for p in cafile.replace(";", ",").split(",") if p.strip()]:
+            cafile_resolved = _resolve_fs_path(part)
+            if not Path(cafile_resolved).exists():
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"GigaChat SSL: CA file not found: {cafile_resolved}",
+                )
+            try:
+                ctx.load_verify_locations(cafile=cafile_resolved)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"GigaChat SSL: could not load CA file: {e}",
+                )
 
-    return ssl.create_default_context()
+    # Add certifi bundle (helps on systems with missing/old CA store).
+    try:
+        import certifi  # type: ignore
+
+        ctx.load_verify_locations(cafile=certifi.where())
+    except Exception:
+        pass
+
+    return ctx
 
 
 def _gigachat_get_token() -> str:
@@ -116,7 +140,10 @@ def _gigachat_get_token() -> str:
         with urlrequest.urlopen(req, timeout=25, context=_ssl_context()) as resp:
             raw = resp.read().decode("utf-8")
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"GigaChat token error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"GigaChat token error: {_format_gigachat_urlopen_error(e)}",
+        )
 
     try:
         data = json.loads(raw)
@@ -190,7 +217,10 @@ def _gigachat_chat(messages: list[dict], temperature: float | None = None) -> st
         with urlrequest.urlopen(req, timeout=35, context=_ssl_context()) as resp:
             raw = resp.read().decode("utf-8")
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"GigaChat request error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"GigaChat request error: {_format_gigachat_urlopen_error(e)}",
+        )
 
     try:
         payload = json.loads(raw)
