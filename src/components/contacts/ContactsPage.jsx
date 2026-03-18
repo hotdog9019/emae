@@ -220,11 +220,19 @@ export function ContactsPage({ toast }) {
           display: flex;
           align-items: center;
           gap: 8px;
+          background: none;
+          border: none;
+          padding: 0;
           color: var(--muted);
           text-decoration: none;
           font-size: 13px;
+          font-family: var(--ff-b);
           transition: color 0.2s;
           cursor: pointer;
+        }
+        .social-link svg {
+          width: 14px;
+          height: 14px;
         }
 
         .social-link:hover {

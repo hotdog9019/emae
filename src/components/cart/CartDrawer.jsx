@@ -3,6 +3,9 @@ import { Icons } from '../icons/Icons';
 
 export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation }) {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const tableIds = reservation
+    ? (Array.isArray(reservation.table_ids) ? reservation.table_ids : (reservation.table_id ? [reservation.table_id] : []))
+    : [];
   
   const checkout = async () => {
     await new Promise(r => setTimeout(r, 800));
@@ -24,7 +27,10 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation 
               <div style={{fontSize:14,fontWeight:700,color:'#ffd97a'}}>Забронировано место</div>
               <div style={{marginTop:6,color:'#ddd',fontSize:13}}>{reservation.date} {reservation.time}</div>
               <div style={{marginTop:4,color:'#aaa',fontSize:13}}>Гостей: {reservation.guests}</div>
-              <div style={{marginTop:4,color:'#aaa',fontSize:13}}>Ресторан: {reservation.restaurant && reservation.restaurant.address ? reservation.restaurant.address : (reservation.restaurant_id ? `#${reservation.restaurant_id}` : '—')}{reservation.table_id ? `, стол ${reservation.table_id}` : ''}</div>
+              <div style={{marginTop:4,color:'#aaa',fontSize:13}}>
+                Ресторан: {reservation.restaurant && reservation.restaurant.address ? reservation.restaurant.address : (reservation.restaurant_id ? `#${reservation.restaurant_id}` : '—')}
+                {tableIds.length === 1 ? `, стол ${tableIds[0]}` : tableIds.length > 1 ? `, столы ${tableIds.join(', ')}` : ''}
+              </div>
             </div>
           )}
           {cart.length === 0 ? (

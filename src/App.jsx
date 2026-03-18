@@ -15,6 +15,7 @@ import { ProfileModal } from './components/auth/ProfileModal';
 import { ReserveModal } from './components/reservation/ReserveModal';
 import { Toast } from './components/ui/Toast';
 import { api } from './utils/api';
+import { SupportWidget } from './components/support/SupportWidget';
 
 function AppContent() {
   const { user, login } = useAuth();
@@ -199,6 +200,8 @@ function AppContent() {
       {cartOpen && <CartDrawer cart={cart} onClose={() => setCartOpen(false)} onQty={setQty} onRemove={removeItem} toast={toast} reservation={reservation} />}
 
       <Toast list={toast.list} />
+
+      <SupportWidget onOpenLogin={() => setModal('login')} toast={toast} />
     </>
   );
 }

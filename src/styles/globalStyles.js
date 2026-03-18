@@ -74,6 +74,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;b
 
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--ff-b);font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:500;cursor:pointer;border:none;transition:all .35s var(--ease);white-space:nowrap;}
+.link-like{background:none;border:none;color:var(--gold);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit}
+.link-like:hover{color:var(--gold2);}
 .btn-ghost{padding:11px 22px;border-radius:var(--r-xl);border:1px solid var(--border2);background:transparent;color:var(--muted);}
 .btn-ghost:hover{border-color:var(--gold);color:var(--text);background:var(--gold-glow);transform:translateY(-1px);}
 .btn-gold{padding:12px 26px;border-radius:var(--r-xl);background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1206;font-weight:600;box-shadow:0 8px 24px rgba(201,169,110,.2);}

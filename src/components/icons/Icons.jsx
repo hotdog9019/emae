@@ -140,25 +140,6 @@ export const Icons = {
     </svg>
   ),
 
-  Telegram: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13"/>
-      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-    </svg>
-  ),
-
-  VK: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 19c-5 0-8-3-8-8V8"/>
-      <path d="M13 19h3"/>
-      <path d="M20 11h-3"/>
-      <path d="M9 11h3"/>
-      <path d="M12 11h1"/>
-      <circle cx="13" cy="16" r="1"/>
-      <circle cx="17" cy="16" r="1"/>
-    </svg>
-  ),
-
   ArrowLeft: () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <line x1="19" y1="12" x2="5" y2="12"/>
@@ -378,6 +359,158 @@ export const Icons = {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.6" opacity="0.9" />
       <path d="M7.5 9.2h1.7c.2 0 .4.1.5.3l1.1 2.1c.2.4.4.6.6.6.2 0 .3-.2.3-.6V9.7c0-.3.2-.5.5-.5h1.7c.3 0 .5.2.5.5v2.1c0 .2.1.4.2.4.2 0 .5-.3.8-.8l1.1-2.1c.1-.2.3-.3.5-.3H19c.4 0 .6.4.4.7l-1.7 2.8c-.2.3-.2.6 0 .9l1.8 2.6c.2.4 0 .8-.4.8h-1.7c-.2 0-.4-.1-.5-.2l-1.4-1.9c-.3-.4-.5-.6-.7-.6-.2 0-.3.2-.3.7v1.5c0 .3-.2.5-.5.5h-1.7c-.3 0-.5-.2-.5-.5v-1.1c0-.5-.2-.6-.4-.6-.3 0-.7.3-1.1.9l-.9 1.3c-.1.2-.3.3-.5.3H7.5c-.3 0-.5-.2-.5-.5V9.7c0-.3.2-.5.5-.5Z" fill="currentColor" />
+    </svg>
+  ),
+
+  Sliders: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </svg>
+  ),
+
+  Sparkles: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      <path d="M5 3v4" />
+      <path d="M19 17v4" />
+      <path d="M3 5h4" />
+      <path d="M17 19h4" />
+    </svg>
+  ),
+
+  Diamond: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 22 12 12 22 2 12" />
+      <path d="M12 2 16 12 12 22 8 12 12 2Z" />
+    </svg>
+  ),
+
+  HeartPulse: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
+      <path d="M3.5 12h4l1.5-3 3 6 2-4 1 1h5" />
+    </svg>
+  ),
+
+  Leaf: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 21c9 0 14-6 14-15C10 6 5 12 5 21Z" />
+      <path d="M5 21c4-4 7-7 12-10" />
+    </svg>
+  ),
+
+  Sprout: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22V12" />
+      <path d="M12 12c0-4-3-7-7-7 0 4 3 7 7 7Z" />
+      <path d="M12 12c0-4 3-7 7-7 0 4-3 7-7 7Z" />
+    </svg>
+  ),
+
+  WheatOff: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v18" />
+      <path d="M9 6c0 2 1 4 3 4 0-2-1-4-3-4Z" />
+      <path d="M15 6c0 2-1 4-3 4 0-2 1-4 3-4Z" />
+      <path d="M9.5 11c0 1.6.8 3 2.5 3 0-1.6-.8-3-2.5-3Z" />
+      <path d="M14.5 11c0 1.6-.8 3-2.5 3 0-1.6.8-3 2.5-3Z" />
+      <line x1="4" y1="4" x2="20" y2="20" />
+    </svg>
+  ),
+
+  MilkOff: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2h8l2 4v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6l2-4Z" />
+      <path d="M8 6h8" />
+      <path d="M10 10h4" />
+      <line x1="4" y1="4" x2="20" y2="20" />
+    </svg>
+  ),
+
+  CrescentStar: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 13.2A8.5 8.5 0 1 1 10.8 3a7 7 0 0 0 10.2 10.2Z" />
+      <path d="M18.5 5l.9 1.8 1.8.9-1.8.9-.9 1.8-.9-1.8-1.8-.9 1.8-.9.9-1.8Z" />
+    </svg>
+  ),
+
+  Flame: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2c2.4 3 4 5.7 4 9.2A6 6 0 0 1 6 15c0-4 3-6.3 6-13Z" />
+      <path d="M10.5 16.2c.8 1 1.5 1.9 1.5 3a2 2 0 0 1-4 0c0-1.4 1-2.4 2.5-3Z" />
+    </svg>
+  ),
+
+  Nut: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2C9 5 6 9 6 13a6 6 0 0 0 12 0c0-4-3-8-6-11Z" />
+      <path d="M12 7v10" />
+    </svg>
+  ),
+
+  DropletOff: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2s-6 7-6 12a6 6 0 0 0 12 0c0-5-6-12-6-12Z" />
+      <line x1="4" y1="4" x2="20" y2="20" />
+    </svg>
+  ),
+
+  EggOff: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22c4 0 7-3 7-7 0-5-3-12-7-12S5 10 5 15c0 4 3 7 7 7Z" />
+      <line x1="4" y1="4" x2="20" y2="20" />
+    </svg>
+  ),
+
+  Fish: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12l-2-3v6l2-3Z" />
+      <path d="M3 12s3-6 10-6c4 0 7 2 10 6-3 4-6 6-10 6-7 0-10-6-10-6Z" />
+      <circle cx="16" cy="10" r="1" />
+    </svg>
+  ),
+
+  Shrimp: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 12c0-4.4-3.4-8-7.8-8-3.3 0-5.6 2.2-5.6 5.3 0 4.8 4.3 8.7 9.6 8.7H21" />
+      <path d="M6.5 9.5H4.2" />
+      <path d="M6.7 12.5H4" />
+      <path d="M7.4 15.5H5.2" />
+      <path d="M17.6 20.2l1.7 1.8" />
+    </svg>
+  ),
+
+  Shell: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 18c0-6 4-11 8-11s8 5 8 11H4Z" />
+      <path d="M12 7v11" />
+      <path d="M8 9l-2 9" />
+      <path d="M16 9l2 9" />
+    </svg>
+  ),
+
+  Coins: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+    </svg>
+  ),
+
+  ArrowUpDown: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v18" />
+      <path d="M5 6l3-3 3 3" />
+      <path d="M16 21V3" />
+      <path d="M13 18l3 3 3-3" />
     </svg>
   ),
 };

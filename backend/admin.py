@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Reservation, User
+from models import Reservation, User, Role
 from schemas import ReservationResponse, ReservationUpdate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -15,7 +15,15 @@ def get_current_admin(user_id: int, db: Session = Depends(get_db)) -> User:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь не найден"
         )
-    if user.role != "admin":
+    role_name = None
+    try:
+        role_name = getattr(user.role, "name", None)
+    except Exception:
+        role_name = None
+    if not role_name and getattr(user, "role_id", None):
+        role = db.query(Role).filter(Role.id == user.role_id).first()
+        role_name = getattr(role, "name", None) if role else None
+    if role_name != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав. Требуется роль администратора"
@@ -251,7 +259,10 @@ def set_user_role_admin(
             detail="Пользователь не найден"
         )
     
-    user.role = role
+    target_role = db.query(Role).filter(Role.name == role).first()
+    if not target_role:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Роль не найдена")
+    user.role_id = target_role.id
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -299,4 +310,3 @@ def clear_reservations(
     deleted = db.query(Reservation).delete()
     db.commit()
     return {"deleted": deleted}
-

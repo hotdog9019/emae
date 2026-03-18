@@ -2,6 +2,7 @@
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
+import json
 
 
 # ================ Р’Р•РўР’Р¬ Р РђР—Р Р•РЁР•РќРР™ Р Р РћР›Р•Р™ ================
@@ -52,6 +53,7 @@ class User(Base):
     vk_id = Column(String, nullable=True, index=True)
     vk_username = Column(String, nullable=True)
     vk_avatar_url = Column(String, nullable=True)
+    is_pro = Column(Boolean, nullable=True, default=False)
     is_active = Column(Boolean, nullable=True, default=True)
     created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
     
@@ -138,11 +140,35 @@ class Reservation(Base):
     is_confirmed = Column(Boolean, default=False)
     restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=True, index=True)
     table_id = Column(Integer, ForeignKey("tables.id"), nullable=True, index=True)
+    # JSON array of table ids (for PRO multi-table reservations)
+    table_ids_json = Column("table_ids", Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # РћС‚РЅРѕС€РµРЅРёСЏ
     restaurant = relationship("Restaurant", backref="reservations")
     table = relationship("Table", backref="reservations")
+
+    @property
+    def table_ids(self):
+        raw = self.table_ids_json
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    out = []
+                    for x in parsed:
+                        try:
+                            v = int(x)
+                        except Exception:
+                            continue
+                        if v not in out:
+                            out.append(v)
+                    return out
+            except Exception:
+                pass
+        if self.table_id:
+            return [self.table_id]
+        return []
 
 
 class Restaurant(Base):
@@ -177,3 +203,61 @@ class EmailVerificationCode(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SupportThread(Base):
+    __tablename__ = "support_threads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="open")
+    last_message_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+
+    user = relationship("User")
+    messages = relationship("SupportMessage", back_populates="thread", cascade="all, delete-orphan")
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    thread_id = Column(Integer, ForeignKey("support_threads.id"), nullable=False, index=True)
+    sender_role = Column(String, nullable=False)  # user|admin
+    sender_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+
+    thread = relationship("SupportThread", back_populates="messages")
+    sender = relationship("User")
+
+
+class MenuItem(Base):
+    __tablename__ = "menu_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cat = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False, index=True)
+    price = Column(Integer, nullable=False, default=0)
+    weight = Column(String, nullable=True)
+    badge = Column(String, nullable=True)
+    tags_json = Column(Text, nullable=True)
+    img = Column(String, nullable=True)
+    desc = Column(Text, nullable=True)
+    ingr = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    starts_at = Column(DateTime(timezone=True), nullable=True)
+    ends_at = Column(DateTime(timezone=True), nullable=True)
+    image_url = Column(String, nullable=True)
+    is_private = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())

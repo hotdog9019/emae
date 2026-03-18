@@ -83,6 +83,10 @@ class EmailCodeConfirm(BaseModel):
     code: str
 
 
+class ProStatusUpdate(BaseModel):
+    enabled: bool = True
+
+
 def _user_columns() -> set:
     return set(User.__table__.columns.keys())
 
@@ -108,20 +112,27 @@ def _public_user_payload(db_user, message: str) -> dict:
         "name": display_name,
         "role_id": role_id,
         "registration_date": registration_date,
+        "is_pro": bool(getattr(db_user, "is_pro", False)),
         "message": message,
         "avatar_url": avatar,
     }
 
 
 def _profile_payload(db_user) -> dict:
+    email_verified = bool(getattr(db_user, "email_verified", False))
+    email = getattr(db_user, "email", None) or ""
+    # hide placeholder emails used for legacy NOT NULL / UNIQUE constraints
+    if email and (email.endswith(".local") or email.endswith("@local")) and not email_verified:
+        email = ""
     return {
         "id": db_user.id,
         "name": getattr(db_user, "name", None) or getattr(db_user, "username", None) or "",
         "full_name": getattr(db_user, "full_name", None) or "",
         "phone": getattr(db_user, "phone", None) or "",
         "birth_date": getattr(db_user, "birth_date", None) or "",
-        "email": getattr(db_user, "email", None) or "",
-        "email_verified": bool(getattr(db_user, "email_verified", False)),
+        "email": email,
+        "email_verified": email_verified,
+        "is_pro": bool(getattr(db_user, "is_pro", False)),
         "telegram_username": getattr(db_user, "telegram_username", None) or "",
         "telegram_photo_url": getattr(db_user, "telegram_photo_url", None) or "",
         "vk_username": getattr(db_user, "vk_username", None) or "",
@@ -160,8 +171,8 @@ def _build_local_payload(db: Session, name: str, password: str, role_id: int, em
         payload["hashed_password"] = hashed
     if "role_id" in cols:
         payload["role_id"] = role_id if role_id else _resolve_default_role_id(db)
-    if "email" in cols and email:
-        payload["email"] = str(email)
+    if "email" in cols:
+        payload["email"] = str(email) if email else f"user_{os.urandom(8).hex()}@local"
     if "email_verified" in cols:
         payload["email_verified"] = False
     if "is_active" in cols:
@@ -473,11 +484,11 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
 
     if _has("role_id"):
-        role = db.query(Role).filter(Role.id == payload.role_id).first()
+        role = db.query(Role).filter(Role.id == 1).first()
         if not role:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not found")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default role not found")
 
-    user = _create_user_if_needed(db, _build_local_payload(db, payload.name, payload.password, payload.role_id, payload.email))
+    user = _create_user_if_needed(db, _build_local_payload(db, payload.name, payload.password, 1, payload.email))
     return _public_user_payload(user, "Registration successful")
 
 
@@ -707,6 +718,20 @@ def update_user_profile(user_id: int, profile: UserProfileUpdate, db: Session = 
     if profile.birth_date is not None and "birth_date" in cols:
         user.birth_date = profile.birth_date.strip()
 
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _profile_payload(user)
+
+
+@router.post("/users/{user_id}/pro")
+def update_pro_status(user_id: int, payload: ProStatusUpdate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    cols = _user_columns()
+    if "is_pro" in cols:
+        user.is_pro = bool(payload.enabled)
     db.add(user)
     db.commit()
     db.refresh(user)

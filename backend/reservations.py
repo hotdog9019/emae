@@ -4,6 +4,7 @@ from database import get_db
 from models import Reservation, User
 from schemas import ReservationCreate, ReservationResponse, ReservationUpdate
 from models import Table
+import json
 
 router = APIRouter(prefix="/api/reservations", tags=["reservations"])
 
@@ -24,19 +25,54 @@ def create_reservation(
             detail="Пользователь не найден"
         )
     
-    # Создаем бронирование
-    # Проверяем выбранный ресторан/столик (если переданы)
-    if reservation.table_id:
-        tbl = db.query(Table).filter(Table.id == reservation.table_id).first()
-        if not tbl or tbl.restaurant_id != reservation.restaurant_id:
+    # Table selection (supports PRO multi-table)
+    table_ids = []
+    if getattr(reservation, "table_ids", None):
+        try:
+            table_ids = [int(x) for x in (reservation.table_ids or []) if x is not None]
+        except Exception:
+            table_ids = []
+    elif reservation.table_id:
+        table_ids = [int(reservation.table_id)]
+
+    # de-duplicate, keep order
+    uniq = []
+    for tid in table_ids:
+        if tid not in uniq:
+            uniq.append(tid)
+    table_ids = uniq
+
+    if len(table_ids) > 1 and not bool(getattr(user, "is_pro", False)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="PRO требуется для бронирования нескольких столов")
+
+    if table_ids:
+        if not reservation.restaurant_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нужно указать restaurant_id при выборе столов")
+
+        # Validate tables exist and belong to restaurant
+        tables = db.query(Table).filter(Table.id.in_(table_ids)).all()
+        table_map = {t.id: t for t in tables}
+        missing = [tid for tid in table_ids if tid not in table_map]
+        if missing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Столики не найдены: {', '.join(map(str, missing))}")
+        wrong = [tid for tid in table_ids if table_map[tid].restaurant_id != reservation.restaurant_id]
+        if wrong:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный столик или ресторан")
-        # Проверим, не забронирован ли столик на это время
-        exists = db.query(Reservation).filter(
-            Reservation.table_id == reservation.table_id,
+
+        # Check if any of selected tables are already reserved at this time
+        existing = db.query(Reservation).filter(
             Reservation.date == reservation.date,
             Reservation.time == reservation.time
-        ).first()
-        if exists:
+        ).all()
+        occupied = set()
+        for r in existing:
+            for tid in (getattr(r, "table_ids", None) or []):
+                try:
+                    occupied.add(int(tid))
+                except Exception:
+                    continue
+        conflict = [tid for tid in table_ids if tid in occupied]
+        if conflict:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Столик уже забронирован на выбранное время")
 
     db_reservation = Reservation(
@@ -48,7 +84,8 @@ def create_reservation(
         guests=reservation.guests,
         special_requests=reservation.special_requests,
         restaurant_id=reservation.restaurant_id,
-        table_id=reservation.table_id
+        table_id=(table_ids[0] if table_ids else reservation.table_id),
+        table_ids_json=(json.dumps(table_ids, ensure_ascii=False) if table_ids else None),
     )
     
     db.add(db_reservation)

@@ -38,6 +38,7 @@ class UserResponse(BaseModel):
     name: str
     role_id: int
     registration_date: datetime
+    is_pro: bool = False
     role: Optional[RoleResponse] = None
 
     class Config:
@@ -151,6 +152,7 @@ class ReservationCreate(BaseModel):
     special_requests: Optional[str] = None
     restaurant_id: Optional[int] = None
     table_id: Optional[int] = None
+    table_ids: Optional[List[int]] = None
 
 
 class RestaurantResponse(BaseModel):
@@ -184,6 +186,7 @@ class ReservationResponse(BaseModel):
     is_confirmed: bool
     restaurant_id: Optional[int]
     table_id: Optional[int]
+    table_ids: List[int] = []
     created_at: datetime
     restaurant: Optional[RestaurantResponse] = None
     table: Optional[TableResponse] = None

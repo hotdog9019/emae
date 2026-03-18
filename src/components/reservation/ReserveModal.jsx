@@ -11,7 +11,8 @@ export function ReserveModal({ onClose, toast }) {
   const [selectedRest, setSelectedRest] = useState(null);
   const [tables, setTables] = useState([]);
   const [occupied, setOccupied] = useState({});
-  const [selectedTable, setSelectedTable] = useState(null);
+  const [selectedTables, setSelectedTables] = useState(() => new Set());
+  const isPro = Boolean(user?.is_pro);
   
   const upd = k => e => setF(p => ({...p, [k]: e.target.value}));
   const times = ["12:00","13:00","14:00","15:00","17:00","18:00","19:00","20:00","21:00"];
@@ -27,20 +28,8 @@ export function ReserveModal({ onClose, toast }) {
   useEffect(() => {
     // загрузим таблицы выбранного ресторана
     if (!selectedRest) return setTables([]);
-    api.restaurants.tables(selectedRest).then(t => { setTables(t); setSelectedTable(null); }).catch(() => { setTables([]); setSelectedTable(null); });
+    api.restaurants.tables(selectedRest).then(t => { setTables(t); setSelectedTables(new Set()); }).catch(() => { setTables([]); setSelectedTables(new Set()); });
   }, [selectedRest]);
-
-  // on mount, ensure no pre-selected table remains
-  useEffect(() => {
-    setSelectedTable(null);
-  }, []);
-
-  // if tables change and previously selected table no longer exists, clear selection
-  useEffect(() => {
-    if (!selectedTable) return;
-    const exists = tables.some(tt => tt && tt.id === selectedTable);
-    if (!exists) setSelectedTable(null);
-  }, [tables, selectedTable]);
 
   useEffect(() => {
     // определим занятые столики для выбранной даты/времени и ресторана
@@ -48,13 +37,42 @@ export function ReserveModal({ onClose, toast }) {
     api.reservations.getAll().then(list => {
       const occ = {};
       list.forEach(r => {
-        if (r.restaurant_id === selectedRest && r.date === f.date && r.time === f.time && r.table_id) {
-          occ[r.table_id] = true;
+        if (r.restaurant_id === selectedRest && r.date === f.date && r.time === f.time) {
+          let ids = [];
+          if (Array.isArray(r.table_ids)) ids = r.table_ids;
+          else if (typeof r.table_ids === 'string') {
+            try {
+              const parsed = JSON.parse(r.table_ids);
+              if (Array.isArray(parsed)) ids = parsed;
+            } catch {
+              // ignore
+            }
+          } else if (r.table_id) ids = [r.table_id];
+
+          ids.forEach((id) => {
+            if (id !== null && id !== undefined && id !== '') occ[id] = true;
+          });
         }
       });
       setOccupied(occ);
     }).catch(() => setOccupied({}));
   }, [f.date, f.time, selectedRest]);
+
+  useEffect(() => {
+    if (!selectedTables.size) return;
+    setSelectedTables((prev) => {
+      let changed = false;
+      const next = new Set();
+      prev.forEach((id) => {
+        if (!!occupied[id] || !!occupied[String(id)]) {
+          changed = true;
+          return;
+        }
+        next.add(id);
+      });
+      return changed ? next : prev;
+    });
+  }, [occupied, selectedTables.size]);
 
   if (!user) {
     return (
@@ -78,6 +96,11 @@ export function ReserveModal({ onClose, toast }) {
       toast.err("Заполните обязательные поля"); 
       return; 
     }
+    const ids = Array.from(selectedTables || []);
+    if (ids.length === 0) {
+      toast.err("Выберите столик на плане");
+      return;
+    }
     setLoading(true);
     try {
       await api.reservations.create(
@@ -89,9 +112,12 @@ export function ReserveModal({ onClose, toast }) {
         f.guests,
         f.comment,
         selectedRest,
-        selectedTable
+        ids[0],
+        (isPro ? ids : null)
       );
-      toast.ok(`Столик на ${f.guests} ${f.guests === 1 ? "гость" : f.guests < 5 ? "гостя" : "гостей"} забронирован! 🍽️`); 
+      const tblWord = ids.length > 1 ? "Столы" : "Столик";
+      const verb = ids.length > 1 ? "забронированы" : "забронирован";
+      toast.ok(`${tblWord} на ${f.guests} ${f.guests === 1 ? "гость" : f.guests < 5 ? "гостя" : "гостей"} ${verb}! 🍽️`); 
       onClose();
     } catch (err) {
       toast.err(err.message || "Ошибка бронирования");
@@ -118,7 +144,7 @@ export function ReserveModal({ onClose, toast }) {
           <div className="date-row">
             <div className="fg">
               <div className="fl"><Icons.Cal />Дата</div>
-              <input className="fi" type="date" value={f.date} onChange={e => { upd("date")(e); setSelectedTable(null); }} 
+              <input className="fi" type="date" value={f.date} onChange={e => { upd("date")(e); setSelectedTables(new Set()); }} 
                      min={new Date().toISOString().split("T")[0]} style={{colorScheme:"dark"}}/>
             </div>
             <div className="fg">
@@ -132,7 +158,7 @@ export function ReserveModal({ onClose, toast }) {
             <div style={{marginTop:12}}>
               <div className="fg">
                 <div className="fl">Ресторан</div>
-                <select className="fi" value={selectedRest||""} onChange={e => { setSelectedRest(Number(e.target.value)); setSelectedTable(null); }}>
+                <select className="fi" value={selectedRest||""} onChange={e => { setSelectedRest(Number(e.target.value)); setSelectedTables(new Set()); }}>
                   <option value="">Выберите ресторан</option>
                   {restaurants.map(r => <option key={r.id} value={r.id}>{r.address}</option>)}
                 </select>
@@ -199,7 +225,7 @@ export function ReserveModal({ onClose, toast }) {
                             const rh = pos.num >= 100 ? 28 : 40;
                             const rx = 8;
                             const isOcc = isTableOcc(t);
-                            const isSelected = selectedTable === (t ? t.id : null);
+                            const isSelected = !!t && selectedTables.has(t.id);
                             const fillFree = '#8de79a';
                             const fillOcc = '#ff6b6b';
                             const fillSel = '#ffd97a';
@@ -212,7 +238,15 @@ export function ReserveModal({ onClose, toast }) {
                               <g key={pos.num} transform={`translate(${cx - rw/2}, ${cy - rh/2})`} style={{cursor}} onClick={() => {
                                 if (!t) return;
                                 if (isTableOcc(t)) return; // cannot select occupied
-                                if (selectedTable === t.id) setSelectedTable(null); else setSelectedTable(t.id);
+                                setSelectedTables((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(t.id)) next.delete(t.id);
+                                  else {
+                                    if (!isPro) next.clear();
+                                    next.add(t.id);
+                                  }
+                                  return next;
+                                });
                               }}>
                                 <rect x={0} y={0} width={rw} height={rh} rx={rx} fill={fill} stroke={isSelected ? 'goldenrod' : 'rgba(0,0,0,0.12)'} strokeWidth={isSelected ? 3 : 1}
                                   style={animStyle} filter={isSelected ? 'url(#shadow)' : ''} transform={isSelected ? `translate(0,-6) scale(1.04)` : ''} />
@@ -261,11 +295,12 @@ export function ReserveModal({ onClose, toast }) {
                       value={f.comment} onChange={upd("comment")} rows={3} 
                       style={{resize:"none",lineHeight:1.6}}/>
           </div>
-          <button className="submit" onClick={submit} disabled={loading || !f.phone || !f.date || !f.time || !selectedTable}>
-            {loading ? "Бронируем..." : "Забронировать столик"}
+          <button className="submit" onClick={submit} disabled={loading || !f.phone || !f.date || !f.time || selectedTables.size === 0}>
+            {loading ? "Бронируем..." : (selectedTables.size > 1 ? "Забронировать столы" : "Забронировать столик")}
           </button>
           <div style={{marginTop:8,color:'var(--muted)',fontSize:13}}>
-            {!selectedTable && <div>Выберите столик на плане (кликните по зелёному столу).</div>}
+            {selectedTables.size === 0 && <div>Выберите столик на плане (кликните по зелёному столу).</div>}
+            {selectedTables.size > 0 && isPro && <div>Выбрано столов: {selectedTables.size}</div>}
             {!f.phone && <div>Укажите телефон.</div>}
             {!f.date && <div>Укажите дату.</div>}
             {!f.time && <div>Укажите время.</div>}
