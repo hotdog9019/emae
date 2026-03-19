@@ -20,6 +20,6 @@ def list_restaurants(db: Session = Depends(get_db)):
 def list_tables(restaurant_id: int, db: Session = Depends(get_db)):
     tbls = db.query(Table).filter(Table.restaurant_id == restaurant_id).all()
     return [
-        {"id": t.id, "restaurant_id": t.restaurant_id, "name": t.name, "seats": t.seats, "x": t.x, "y": t.y}
+        {"id": t.id, "restaurant_id": t.restaurant_id, "name": t.name, "seats": t.seats, "x": t.x, "y": t.y, "is_blocked": bool(getattr(t, "is_blocked", False))}
         for t in tbls
     ]

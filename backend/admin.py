@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Reservation, User, Role
+from models import Reservation, User, Role, Table
 from schemas import ReservationResponse, ReservationUpdate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+class TableUpdate(BaseModel):
+    is_blocked: bool
 
 
 def get_current_admin(user_id: int, db: Session = Depends(get_db)) -> User:
@@ -171,6 +176,38 @@ def delete_user_reservations_admin(
     db.commit()
     
     return None
+
+
+# ================ УПРАВЛЕНИЕ СТОЛИКАМИ ================
+
+@router.put("/tables/{table_id}", response_model=dict)
+def update_table_admin(
+    table_id: int,
+    payload: TableUpdate,
+    admin_id: int,
+    db: Session = Depends(get_db)
+):
+    """Заблокировать/разблокировать столик для брони (только для админа)"""
+    get_current_admin(admin_id, db)
+
+    tbl = db.query(Table).filter(Table.id == table_id).first()
+    if not tbl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Столик не найден")
+
+    tbl.is_blocked = bool(payload.is_blocked)
+    db.add(tbl)
+    db.commit()
+    db.refresh(tbl)
+
+    return {
+        "id": tbl.id,
+        "restaurant_id": tbl.restaurant_id,
+        "name": tbl.name,
+        "seats": tbl.seats,
+        "x": tbl.x,
+        "y": tbl.y,
+        "is_blocked": bool(getattr(tbl, "is_blocked", False)),
+    }
 
 
 # ================ УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ================

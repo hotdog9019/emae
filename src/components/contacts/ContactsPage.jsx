@@ -1,22 +1,36 @@
 import React, { useState } from 'react';
 import { Icons } from '../icons/Icons';
 import { CONTACT_INFO } from '../../data/constants';
+import { useI18n } from '../../hooks/useI18n';
 
 export function ContactsPage({ toast }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({ name: "", phone: "", message: "" });
   const [sending, setSending] = useState(false);
+  const phoneDigits = (CONTACT_INFO.phone || '').replace(/\D/g, '');
+  const tg = String(CONTACT_INFO.social?.telegram || '').replace(/^@/, '');
+  const ig = String(CONTACT_INFO.social?.instagram || '').replace(/^@/, '');
+  const vk = String(CONTACT_INFO.social?.vk || '').replace(/^@/, '');
+  const waUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
+  const tgUrl = tg ? `https://t.me/${tg}` : null;
+  const igUrl = ig ? `https://instagram.com/${ig}` : null;
+  const vkUrl = vk ? `https://vk.com/${vk}` : null;
+  const { lat, lng } = CONTACT_INFO.coordinates || {};
+  const osmEmbed = (Number.isFinite(lat) && Number.isFinite(lng))
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(`${lng - 0.01},${lat - 0.006},${lng + 0.01},${lat + 0.006}`)}&layer=mapnik&marker=${encodeURIComponent(`${lat},${lng}`)}`
+    : null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.phone) {
-      toast.err("Заполните имя и телефон");
+      toast.err(t('toast_contacts_fill'));
       return;
     }
     setSending(true);
     // Имитация отправки
     await new Promise(r => setTimeout(r, 1000));
     setSending(false);
-    toast.ok("Сообщение отправлено! Мы свяжемся с вами в ближайшее время");
+    toast.ok(t('toast_contacts_sent'));
     setForm({ name: "", phone: "", message: "" });
   };
 
@@ -28,90 +42,122 @@ export function ContactsPage({ toast }) {
 
   return (
     <div className="page contacts-page">
-      <div className="page-title">Наши <em>контакты</em></div>
-      <div className="page-sub">Всегда на связи · Всегда рядом</div>
+      <div className="page-title">{t('contacts_title_pre')} <em>{t('contacts_title_em')}</em></div>
+      <div className="page-sub">{t('contacts_sub')}</div>
 
       <div className="contacts-grid">
         <div className="contacts-info">
           <div className="info-card">
-            <h3 className="info-title">📍 Адрес</h3>
+            <h3 className="info-title">📍 {t('contacts_address')}</h3>
             <p className="info-text">{CONTACT_INFO.address}</p>
             <button className="btn btn-ghost btn-small" onClick={openMap}>
-              <Icons.Map /> Показать на карте
+              <Icons.Map /> {t('contacts_show_on_map')}
             </button>
           </div>
 
           <div className="info-card">
-            <h3 className="info-title">📞 Телефон</h3>
-            <a href={`tel:${CONTACT_INFO.phone.replace(/\D/g, '')}`} className="info-link">
+            <h3 className="info-title">📞 {t('contacts_phone')}</h3>
+            <a href={`tel:${phoneDigits}`} className="info-link">
               {CONTACT_INFO.phone}
             </a>
-            <p className="info-note">Ежедневно с 12:00 до 00:00</p>
+            <p className="info-note">{t('contacts_work_hours')}</p>
+            <div className="call-actions">
+              <a className="btn btn-gold btn-small" href={`tel:${phoneDigits}`} aria-label={t('contacts_call')}>{t('contacts_call')}</a>
+              {waUrl && <a className="btn btn-ghost btn-small" href={waUrl} target="_blank" rel="noreferrer">WhatsApp</a>}
+            </div>
           </div>
 
           <div className="info-card">
-            <h3 className="info-title">✉️ Email</h3>
+            <h3 className="info-title">✉️ {t('contacts_email')}</h3>
             <a href={`mailto:${CONTACT_INFO.email}`} className="info-link">
               {CONTACT_INFO.email}
             </a>
-            <p className="info-note">Ответим в течение часа</p>
+            <p className="info-note">{t('contacts_reply_hour')}</p>
           </div>
 
           <div className="info-card">
-            <h3 className="info-title">🕒 Часы работы</h3>
-            <p className="info-text">{CONTACT_INFO.workHours}</p>
-            <p className="info-note">{CONTACT_INFO.kitchenHours}</p>
+            <h3 className="info-title">🕒 {t('contacts_hours')}</h3>
+            <p className="info-text">{t('contacts_work_hours')}</p>
+            <p className="info-note">{t('contacts_kitchen_hours')}</p>
           </div>
 
           <div className="info-card social-card">
-            <h3 className="info-title">Мы в соцсетях</h3>
+            <h3 className="info-title">{t('contacts_social')}</h3>
             <div className="social-links">
-              <button type="button" className="social-link" onClick={() => { toast.ok("Instagram: " + CONTACT_INFO.social.instagram); }}>
-                <Icons.Instagram /> Instagram
-              </button>
-              <button type="button" className="social-link" onClick={() => { toast.ok("Telegram: " + CONTACT_INFO.social.telegram); }}>
-                <Icons.Telegram /> Telegram
-              </button>
-              <button type="button" className="social-link" onClick={() => { toast.ok("VK: " + CONTACT_INFO.social.vk); }}>
-                <Icons.VK /> VK
-              </button>
+              {igUrl && (
+                <a className="social-link" href={igUrl} target="_blank" rel="noreferrer">
+                  <Icons.Instagram /> Instagram
+                </a>
+              )}
+              {tgUrl && (
+                <a className="social-link" href={tgUrl} target="_blank" rel="noreferrer">
+                  <Icons.Telegram /> Telegram
+                </a>
+              )}
+              {waUrl && (
+                <a className="social-link" href={waUrl} target="_blank" rel="noreferrer">
+                  <Icons.Phone /> WhatsApp
+                </a>
+              )}
+              {vkUrl && (
+                <a className="social-link" href={vkUrl} target="_blank" rel="noreferrer">
+                  <Icons.VK /> VK
+                </a>
+              )}
             </div>
           </div>
+
+          {osmEmbed && (
+            <div className="info-card map-card">
+              <h3 className="info-title">🗺 {t('contacts_map')}</h3>
+              <div className="map-embed">
+                <iframe title={t('contacts_map')} src={osmEmbed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+              </div>
+              <div className="map-actions">
+                <button className="btn btn-ghost btn-small" onClick={openMap}><Icons.Map /> {t('contacts_open_yandex')}</button>
+                {Number.isFinite(lat) && Number.isFinite(lng) && (
+                  <a className="btn btn-ghost btn-small" href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noreferrer">
+                    <Icons.Share /> {t('contacts_open_google')}
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="contacts-form">
           <div className="form-card">
-            <h3 className="form-title">Напишите нам</h3>
-            <p className="form-subtitle">Задайте вопрос или оставьте отзыв</p>
+            <h3 className="form-title">{t('contacts_write_us')}</h3>
+            <p className="form-subtitle">{t('contacts_write_sub')}</p>
             
             <form onSubmit={handleSubmit}>
               <div className="fg">
-                <div className="fl"><Icons.User /> Ваше имя</div>
+                <div className="fl"><Icons.User /> {t('contacts_name')}</div>
                 <input 
                   type="text" 
                   className="fi" 
-                  placeholder="Как к вам обращаться?" 
+                  placeholder={t('contacts_name_ph')} 
                   value={form.name}
                   onChange={e => setForm({...form, name: e.target.value})}
                 />
               </div>
 
               <div className="fg">
-                <div className="fl"><Icons.Phone /> Телефон</div>
+                <div className="fl"><Icons.Phone /> {t('contacts_phone')}</div>
                 <input 
                   type="tel" 
                   className="fi" 
-                  placeholder="+7 (___) ___-__-__"
+                  placeholder={t('contacts_phone_ph')}
                   value={form.phone}
                   onChange={e => setForm({...form, phone: e.target.value})}
                 />
               </div>
 
               <div className="fg">
-                <div className="fl"><Icons.Message /> Сообщение</div>
+                <div className="fl"><Icons.Message /> {t('contacts_message')}</div>
                 <textarea 
                   className="fi" 
-                  placeholder="Ваш вопрос или пожелание..." 
+                  placeholder={t('contacts_message_ph')} 
                   rows="4"
                   value={form.message}
                   onChange={e => setForm({...form, message: e.target.value})}
@@ -124,7 +170,7 @@ export function ContactsPage({ toast }) {
                 className="submit" 
                 disabled={sending || !form.name || !form.phone}
               >
-                {sending ? "Отправка..." : "Отправить сообщение"}
+                {sending ? t('contacts_sending') : t('contacts_send')}
               </button>
             </form>
           </div>
@@ -168,6 +214,11 @@ export function ContactsPage({ toast }) {
         .social-card {
           grid-column: span 2;
         }
+        .map-card { grid-column: span 2; }
+        .map-embed { margin-top: 10px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.10); background: rgba(0,0,0,0.25); }
+        .map-embed iframe { width: 100%; height: 260px; border: 0; display: block; }
+        .map-actions { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .call-actions { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 
         .info-title {
           font-family: var(--ff-d);
@@ -264,6 +315,7 @@ export function ContactsPage({ toast }) {
           .social-card {
             grid-column: span 1;
           }
+          .map-card { grid-column: span 1; }
           
           .social-links {
             flex-direction: column;

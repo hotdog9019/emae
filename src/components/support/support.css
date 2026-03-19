@@ -5,7 +5,7 @@
   transform:translateY(-50%);
   border:1px solid rgba(201,169,110,0.35);
   border-right:none;
-  background:rgba(0,0,0,0.35);
+  background:var(--pop-bg);
   backdrop-filter:blur(18px) saturate(140%);
   color:var(--gold2);
   border-radius:14px 0 0 14px;
@@ -29,16 +29,18 @@
   width:min(380px, calc(100vw - 36px));
   height:min(560px, calc(100vh - 36px));
   border-radius:22px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(17,17,16,0.78);
+  border:1px solid var(--border2);
+  background:var(--pop-bg);
   backdrop-filter:blur(18px) saturate(150%);
-  box-shadow:0 30px 80px rgba(0,0,0,0.7);
+  box-shadow:var(--pop-shadow);
   overflow:hidden;
   z-index:5001;
   animation:swIn .28s var(--ease);
   display:flex;
   flex-direction:column;
 }
+.sw-wrap.dragging{user-select:none;}
+.sw-wrap.dragging .sw-head{cursor:grabbing;}
 @keyframes swIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .sw-wrap::before{
   content:'';
@@ -58,12 +60,17 @@
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-  border-bottom:1px solid rgba(255,255,255,0.08);
+  flex-wrap:wrap;
+  cursor:grab;
+  touch-action:none;
+  border-bottom:1px solid var(--border);
 }
+.sw-head-left{min-width:0;flex:1 1 220px;}
 .sw-title{
   display:flex;
   align-items:center;
   gap:10px;
+  flex-wrap:wrap;
   color:var(--text);
   font-family:var(--ff-d);
   font-size:20px;
@@ -84,11 +91,11 @@
   text-transform:uppercase;
 }
 .sw-vip svg{color:var(--gold);}
-.sw-sub{color:rgba(242,237,230,0.45);font-size:11px;line-height:1.5;margin-top:4px;}
+.sw-sub{color:var(--muted);font-size:11px;line-height:1.5;margin-top:4px;}
 .sw-close{
   width:40px;height:40px;border-radius:50%;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(0,0,0,0.18);
+  border:1px solid var(--border2);
+  background:var(--glass);
   color:var(--muted);
   display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;transition:all .25s var(--ease);
@@ -102,22 +109,22 @@
   gap:6px;
   padding:4px;
   border-radius:999px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(0,0,0,0.18);
+  border:1px solid var(--glass-border);
+  background:var(--glass);
 }
 .sw-mode{
   padding:8px 10px;
   border-radius:999px;
   border:1px solid transparent;
   background:transparent;
-  color:rgba(242,237,230,0.55);
+  color:var(--muted-strong);
   font-size:10px;
   letter-spacing:2.6px;
   text-transform:uppercase;
   cursor:pointer;
   transition:all .22s var(--ease);
 }
-.sw-mode:hover{color:rgba(242,237,230,0.75);}
+.sw-mode:hover{color:var(--text);}
 .sw-mode.on{
   border-color:rgba(201,169,110,0.45);
   background:rgba(201,169,110,0.10);
@@ -136,7 +143,7 @@
   text-align:center;
 }
 .sw-empty-title{font-family:var(--ff-d);font-size:22px;color:var(--text);}
-.sw-empty-sub{color:rgba(242,237,230,0.45);font-size:12px;line-height:1.6;margin-bottom:10px;}
+.sw-empty-sub{color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:10px;}
 
 .sw-list{
   position:relative;
@@ -149,12 +156,12 @@
   gap:10px;
 }
 .sw-sys{
-  color:rgba(242,237,230,0.48);
+  color:var(--muted-strong);
   font-size:12px;
   line-height:1.6;
-  border:1px solid rgba(255,255,255,0.08);
+  border:1px solid var(--glass-border);
   border-radius:14px;
-  background:rgba(0,0,0,0.18);
+  background:var(--glass);
   padding:12px 12px;
 }
 .sw-msg{display:flex;}
@@ -165,9 +172,9 @@
   max-width:86%;
   padding:10px 12px;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,0.08);
-  background:rgba(0,0,0,0.18);
-  color:rgba(242,237,230,0.80);
+  border:1px solid var(--glass-border);
+  background:var(--glass);
+  color:var(--text);
   font-size:12px;
   line-height:1.55;
   white-space:pre-wrap;
@@ -206,7 +213,7 @@
   display:flex;
   gap:10px;
   align-items:center;
-  border-top:1px solid rgba(255,255,255,0.08);
+  border-top:1px solid var(--border);
 }
 .sw-inp{flex:1;}
 .sw-send{
@@ -224,4 +231,11 @@
 }
 .sw-send:hover:not(:disabled){background:rgba(201,169,110,0.18);transform:translateY(-1px);}
 .sw-send:disabled{opacity:.45;cursor:not-allowed;}
-.sw-send svg{transform:rotate(45deg);color:var(--gold);}
+.sw-send svg{transform:none;color:var(--gold);}
+
+@media (max-width: 420px){
+  .sw-head-actions{width:100%;justify-content:space-between;}
+  .sw-modes{flex:1;justify-content:space-between;}
+  .sw-mode{flex:1;text-align:center;padding:8px 6px;letter-spacing:1.8px;}
+  .sw-close{width:38px;height:38px;}
+}

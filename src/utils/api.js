@@ -1,5 +1,34 @@
 const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/+$/, '');
 
+const UI_LANG_KEY = 'ui_lang';
+
+function getUiLang() {
+  if (typeof window === 'undefined') return 'ru';
+  try {
+    const v = window.localStorage.getItem(UI_LANG_KEY);
+    return v === 'en' || v === 'zh' || v === 'ru' ? v : 'ru';
+  } catch {
+    return 'ru';
+  }
+}
+
+function tr(msgByLang) {
+  const lang = getUiLang();
+  return msgByLang?.[lang] || msgByLang?.ru || '';
+}
+
+const ERR_MIXED_CONTENT = {
+  ru: 'Браузер блокирует запрос: страница открыта по HTTPS, а API по HTTP (mixed content). Для локального теста откройте фронт локально (`npm start`) или поднимите HTTPS-туннель для API и укажите его в REACT_APP_API_BASE.',
+  en: 'The browser blocked the request: the page is opened via HTTPS, but the API is HTTP (mixed content). For local testing, run the frontend locally (`npm start`) or use an HTTPS tunnel for the API and set it in REACT_APP_API_BASE.',
+  zh: '浏览器已阻止请求：页面通过 HTTPS 打开，但 API 使用 HTTP（mixed content）。本地测试请在本地启动前端（`npm start`），或为 API 建立 HTTPS 隧道并在 REACT_APP_API_BASE 中指定。',
+};
+
+const ERR_UNREACHABLE = {
+  ru: 'Не удалось подключиться к серверу. Проверьте, что бэкенд запущен и REACT_APP_API_BASE указывает на правильный адрес.',
+  en: 'Could not connect to the server. Make sure the backend is running and REACT_APP_API_BASE points to the correct address.',
+  zh: '无法连接到服务器。请确认后端已启动，并且 REACT_APP_API_BASE 指向正确地址。',
+};
+
 async function requestJson(path, options = {}) {
   const { method = 'GET', body, headers = {} } = options;
   const init = {
@@ -21,10 +50,10 @@ async function requestJson(path, options = {}) {
     if (typeof window !== 'undefined') {
       const pageProto = window.location?.protocol || '';
       if (pageProto === 'https:' && /^http:\/\//i.test(API_BASE)) {
-        throw new Error('Браузер блокирует запрос: страница открыта по HTTPS, а API по HTTP (mixed content). Для локального теста откройте фронт локально (`npm start`) или поднимите HTTPS-туннель для API и укажите его в REACT_APP_API_BASE.');
+        throw new Error(tr(ERR_MIXED_CONTENT));
       }
     }
-    throw new Error('Не удалось подключиться к серверу. Проверьте, что бэкенд запущен и REACT_APP_API_BASE указывает на правильный адрес.');
+    throw new Error(tr(ERR_UNREACHABLE));
   }
 
   let payload = null;
@@ -285,6 +314,30 @@ export const api = {
 
     getAll: async () => {
       return requestJson('/reservations/');
+    },
+  },
+
+  admin: {
+    reservations: {
+      list: async (adminId) => {
+        return requestJson(`/admin/reservations?admin_id=${encodeURIComponent(String(adminId || ''))}`);
+      },
+
+      update: async (adminId, reservationId, payload) => {
+        return requestJson(`/admin/reservations/${reservationId}?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'PUT',
+          body: payload,
+        });
+      },
+    },
+
+    tables: {
+      setBlocked: async (adminId, tableId, blocked) => {
+        return requestJson(`/admin/tables/${tableId}?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'PUT',
+          body: { is_blocked: Boolean(blocked) },
+        });
+      },
     },
   },
 

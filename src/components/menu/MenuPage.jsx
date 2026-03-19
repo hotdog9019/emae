@@ -4,76 +4,77 @@ import { api } from '../../utils/api';
 import './menu.css';
 import { Icons } from '../icons/Icons';
 import { DishModal } from './DishModal';
+import { useI18n } from '../../hooks/useI18n';
 
 const norm = (v) => String(v || '').trim().toLowerCase();
 const hasTag = (dish, tag) => Array.isArray(dish?.tags) && dish.tags.includes(tag);
 
 const INCLUDE_FILTER_GROUPS = [
   {
-    title: 'Подборка',
+    titleKey: 'filters_group_collection',
     items: [
       {
         key: 'hit',
-        label: 'Хит',
+        labelKey: 'filter_hit',
         icon: Icons.Sparkles,
         predicate: (d) => hasTag(d, 'хит') || d.badge === 'Хит',
       },
       {
         key: 'new',
-        label: 'Новинки',
+        labelKey: 'filter_new',
         icon: Icons.Gift,
         predicate: (d) => hasTag(d, 'new') || d.badge === 'Новинка',
       },
       {
         key: 'premium',
-        label: 'Premium',
+        labelKey: 'filter_premium',
         icon: Icons.Diamond,
         predicate: (d) => d.badge === 'Premium',
       },
       {
         key: 'healthy',
-        label: 'ЗОЖ',
+        labelKey: 'filter_healthy',
         icon: Icons.HeartPulse,
         predicate: (d) => hasTag(d, 'бжу') || d.badge === 'ЗОЖ' || d.badge === 'Бжу',
       },
     ],
   },
   {
-    title: 'Стиль питания',
+    titleKey: 'filters_group_diet',
     items: [
       {
         key: 'vegan',
-        label: 'Веган',
+        labelKey: 'filter_vegan',
         icon: Icons.Leaf,
         predicate: (d) => hasTag(d, 'веган'),
       },
       {
         key: 'veg',
-        label: 'Вег',
+        labelKey: 'filter_veg',
         icon: Icons.Sprout,
         predicate: (d) => hasTag(d, 'veg') || hasTag(d, 'веган'),
       },
       {
         key: 'glutenFree',
-        label: 'Без глютена',
+        labelKey: 'filter_gluten_free',
         icon: Icons.WheatOff,
         predicate: (d) => hasTag(d, 'безглютен'),
       },
       {
         key: 'lactoseFree',
-        label: 'Без лактозы',
+        labelKey: 'filter_lactose_free',
         icon: Icons.MilkOff,
         predicate: (d) => hasTag(d, 'безлактозный'),
       },
       {
         key: 'halal',
-        label: 'Халяль',
+        labelKey: 'filter_halal',
         icon: Icons.CrescentStar,
         predicate: (d) => hasTag(d, 'халяль') || d.badge === 'Халяль',
       },
       {
         key: 'spicy',
-        label: 'Острое',
+        labelKey: 'filter_spicy',
         icon: Icons.Flame,
         predicate: (d) => hasTag(d, 'острое') || d.badge === 'Острый',
       },
@@ -82,21 +83,32 @@ const INCLUDE_FILTER_GROUPS = [
 ];
 
 const EXCLUDE_ALLERGENS = [
-  { tag: 'аллергены-орехи', label: 'Орехи', icon: Icons.Nut },
-  { tag: 'аллергены-молоко', label: 'Молоко', icon: Icons.DropletOff },
-  { tag: 'аллергены-яйца', label: 'Яйца', icon: Icons.EggOff },
-  { tag: 'аллергены-глютен', label: 'Глютен', icon: Icons.WheatOff },
-  { tag: 'аллергены-рыба', label: 'Рыба', icon: Icons.Fish },
-  { tag: 'аллергены-ракообразные', label: 'Ракообразные', icon: Icons.Shrimp },
-  { tag: 'аллергены-моллюски', label: 'Моллюски', icon: Icons.Shell },
+  { tag: 'аллергены-орехи', labelKey: 'allergen_nuts', icon: Icons.Nut },
+  { tag: 'аллергены-молоко', labelKey: 'allergen_milk', icon: Icons.DropletOff },
+  { tag: 'аллергены-яйца', labelKey: 'allergen_eggs', icon: Icons.EggOff },
+  { tag: 'аллергены-глютен', labelKey: 'allergen_gluten', icon: Icons.WheatOff },
+  { tag: 'аллергены-рыба', labelKey: 'allergen_fish', icon: Icons.Fish },
+  { tag: 'аллергены-ракообразные', labelKey: 'allergen_crustaceans', icon: Icons.Shrimp },
+  { tag: 'аллергены-моллюски', labelKey: 'allergen_mollusks', icon: Icons.Shell },
 ];
 
 const ALL_INCLUDE = INCLUDE_FILTER_GROUPS.flatMap((g) => g.items);
 const INCLUDE_BY_KEY = new Map(ALL_INCLUDE.map((f) => [f.key, f]));
 const ALLERGEN_BY_TAG = new Map(EXCLUDE_ALLERGENS.map((a) => [a.tag, a]));
 
+const ALL_CAT = '__all__';
+const CAT_KEY = {
+  Супы: 'cat_soups',
+  Салаты: 'cat_salads',
+  Закуски: 'cat_snacks',
+  Горячее: 'cat_hot',
+  Десерты: 'cat_desserts',
+  Напитки: 'cat_drinks',
+};
+
 export function MenuPage({ onAddToCart, toast }) {
-  const [cat, setCat] = useState("Все");
+  const { t } = useI18n();
+  const [cat, setCat] = useState(ALL_CAT);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('smart');
@@ -106,7 +118,7 @@ export function MenuPage({ onAddToCart, toast }) {
   const [selected, setSelected] = useState(null);
   const [added, setAdded] = useState(new Set());
   const [menuItems, setMenuItems] = useState(MENU);
-  const [cats, setCats] = useState(CATS);
+  const [cats, setCats] = useState(() => [ALL_CAT, ...CATS.filter((c) => c && c !== 'Все')]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +129,7 @@ export function MenuPage({ onAddToCart, toast }) {
         if (Array.isArray(list) && list.length > 0) {
           setMenuItems(list);
           const uniq = Array.from(new Set(list.map((x) => x?.cat).filter(Boolean)));
-          setCats(['Все', ...uniq]);
+          setCats([ALL_CAT, ...uniq]);
         }
       } catch {
         // fallback to local constants
@@ -128,7 +140,7 @@ export function MenuPage({ onAddToCart, toast }) {
     };
   }, []);
 
-  const filteredByCat = useMemo(() => (cat === "Все" ? menuItems : menuItems.filter((d) => d.cat === cat)), [cat, menuItems]);
+  const filteredByCat = useMemo(() => (cat === ALL_CAT ? menuItems : menuItems.filter((d) => d.cat === cat)), [cat, menuItems]);
 
   const priceBounds = useMemo(() => {
     const prices = filteredByCat.map((d) => Number(d.price || 0)).filter((n) => Number.isFinite(n) && n > 0);
@@ -228,9 +240,9 @@ export function MenuPage({ onAddToCart, toast }) {
 
   const allergenCount = (tag) => listForFacets.filter((d) => hasTag(d, tag)).length;
   
-  const handleAdd = dish => {
+  const handleAdd = (dish) => {
     onAddToCart(dish);
-    toast.ok(`«${dish.name}» в корзине`);
+    toast.ok(t('toast_in_cart', { name: dish.name }));
     setAdded(p => new Set([...p, dish.id]));
     setTimeout(() => setAdded(p => { 
       const n = new Set(p); 
@@ -238,16 +250,22 @@ export function MenuPage({ onAddToCart, toast }) {
       return n; 
     }), 1800);
   };
+
+  const catLabel = (c) => {
+    if (c === ALL_CAT) return t('cat_all');
+    const key = CAT_KEY[c];
+    return key ? t(key) : c;
+  };
   
   return (
       <div className="page">
-      <div className="page-title">Наше <em>меню</em></div>
-      <div className="page-sub">Авторская кухня · Свежие продукты · Каждый день</div>
+      <div className="page-title">{t('menu_title_pre')} <em>{t('menu_title_em')}</em></div>
+      <div className="page-sub">{t('menu_sub')}</div>
       <div className="cat-tabs">
-        {cats.map(c => <button key={c} className={`cat-tab${cat===c?" on":""}`} onClick={() => setCat(c)}>{c}</button>)}
+        {cats.map(c => <button key={c} className={`cat-tab${cat===c?" on":""}`} onClick={() => setCat(c)}>{catLabel(c)}</button>)}
         <button className={`cat-tab filter-btn${filtersOpen?" on":""}`} onClick={() => setFiltersOpen(s => !s)}>
           <Icons.Sliders />
-          Фильтры
+          {t('menu_filters')}
           {activeCount > 0 && <span className="filter-count">{activeCount}</span>}
         </button>
       </div>
@@ -255,18 +273,18 @@ export function MenuPage({ onAddToCart, toast }) {
       <div className="menu-toolbar">
         <div className="menu-search">
           <Icons.Search />
-          <input
-            className="fi menu-search-input"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск по блюдам, ингредиентам…"
-          />
-          {norm(query) && (
-            <button type="button" className="menu-search-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}>
-              <Icons.XIcon />
-            </button>
-          )}
+            <input
+              className="fi menu-search-input"
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('menu_search_ph')}
+            />
+            {norm(query) && (
+              <button type="button" className="menu-search-clear" aria-label={t('menu_clear_search')} onClick={() => setQuery('')}>
+                <Icons.XIcon />
+              </button>
+            )}
         </div>
 
         <div className="menu-stats">
@@ -275,7 +293,7 @@ export function MenuPage({ onAddToCart, toast }) {
           </div>
           {activeCount > 0 && (
             <button type="button" className="menu-stats-reset" onClick={resetAll}>
-              <Icons.Refresh /> Сбросить
+              <Icons.Refresh /> {t('menu_stats_reset')}
             </button>
           )}
         </div>
@@ -286,24 +304,24 @@ export function MenuPage({ onAddToCart, toast }) {
           <div className="filters-head">
             <div className="filters-title">
               <Icons.Sliders />
-              <strong>Фильтры</strong>
-              <span className="filters-sub">Собери идеальное меню</span>
+              <strong>{t('menu_filters')}</strong>
+              <span className="filters-sub">{t('menu_filters_sub')}</span>
             </div>
-            <button type="button" className="filters-close" aria-label="Закрыть фильтры" onClick={() => setFiltersOpen(false)}>
+            <button type="button" className="filters-close" aria-label={t('menu_close_filters')} onClick={() => setFiltersOpen(false)}>
               <Icons.ChevronUp />
             </button>
           </div>
 
           <div className="filters-grid">
-            <div className="filters-col">
-              {INCLUDE_FILTER_GROUPS.map((g) => (
-                <div key={g.title} className="filters-section">
-                  <div className="filters-section-title">{g.title}</div>
-                  <div className="chip-row">
-                    {g.items.map((f) => {
-                      const Icon = f.icon;
-                      const selected = selectedFilters.has(f.key);
-                      const c = includeCount(f.key);
+              <div className="filters-col">
+                {INCLUDE_FILTER_GROUPS.map((g) => (
+                  <div key={g.titleKey} className="filters-section">
+                    <div className="filters-section-title">{t(g.titleKey)}</div>
+                    <div className="chip-row">
+                      {g.items.map((f) => {
+                        const Icon = f.icon;
+                        const selected = selectedFilters.has(f.key);
+                        const c = includeCount(f.key);
                       return (
                         <button
                           key={f.key}
@@ -313,7 +331,7 @@ export function MenuPage({ onAddToCart, toast }) {
                           aria-pressed={selected}
                         >
                           <span className="f-ico"><Icon /></span>
-                          <span className="f-lbl">{f.label}</span>
+                          <span className="f-lbl">{t(f.labelKey)}</span>
                           <span className="f-count">{c}</span>
                         </button>
                       );
@@ -325,22 +343,22 @@ export function MenuPage({ onAddToCart, toast }) {
 
             <div className="filters-col">
               <div className="filters-section">
-                <div className="filters-section-title">Сортировка</div>
+                <div className="filters-section-title">{t('menu_sort')}</div>
                 <div className="filters-row">
                   <select className="fi filters-select" value={sort} onChange={(e) => setSort(e.target.value)}>
-                    <option value="smart">Рекомендовано</option>
-                    <option value="new_first">Сначала новинки</option>
-                    <option value="price_asc">Цена: по возрастанию</option>
-                    <option value="price_desc">Цена: по убыванию</option>
+                    <option value="smart">{t('menu_sort_reco')}</option>
+                    <option value="new_first">{t('menu_sort_new')}</option>
+                    <option value="price_asc">{t('menu_sort_price_asc')}</option>
+                    <option value="price_desc">{t('menu_sort_price_desc')}</option>
                   </select>
                 </div>
               </div>
 
               <div className="filters-section">
-                <div className="filters-section-title">Цена</div>
+                <div className="filters-section-title">{t('menu_price')}</div>
                 <div className="price-row">
                   <div className="price-meta">
-                    <span className="price-label">до</span>
+                    <span className="price-label">{t('menu_price_up_to')}</span>
                     <span className="price-val">{effectiveMaxPrice || priceBounds.max} ₽</span>
                   </div>
                   <input
@@ -365,7 +383,7 @@ export function MenuPage({ onAddToCart, toast }) {
               </div>
 
               <div className="filters-section">
-                <div className="filters-section-title">Исключить аллергены</div>
+                <div className="filters-section-title">{t('menu_exclude_allergens')}</div>
                 <div className="chip-row">
                   {EXCLUDE_ALLERGENS.map((a) => {
                     const Icon = a.icon;
@@ -380,7 +398,7 @@ export function MenuPage({ onAddToCart, toast }) {
                         aria-pressed={selected}
                       >
                         <span className="f-ico"><Icon /></span>
-                        <span className="f-lbl">без {a.label.toLowerCase()}</span>
+                        <span className="f-lbl">{t('menu_without', { allergen: t(a.labelKey).toLowerCase() })}</span>
                         <span className="f-count">{c}</span>
                       </button>
                     );
@@ -391,15 +409,15 @@ export function MenuPage({ onAddToCart, toast }) {
           </div>
 
           <div className="filters-footer">
-            <button type="button" className="btn btn-ghost" onClick={resetAll}>Сбросить всё</button>
-            <button type="button" className="btn btn-gold" onClick={() => setFiltersOpen(false)}>Готово</button>
+            <button type="button" className="btn btn-ghost" onClick={resetAll}>{t('reset_all')}</button>
+            <button type="button" className="btn btn-gold" onClick={() => setFiltersOpen(false)}>{t('done')}</button>
           </div>
         </div>
       )}
 
       {(selectedFilters.size > 0 || excludedAllergens.size > 0 || norm(query) || maxPrice != null || sort !== 'smart') && (
         <div className="active-bar">
-          <div className="active-bar-label"><Icons.Sparkles /> Активно:</div>
+          <div className="active-bar-label"><Icons.Sparkles /> {t('menu_active')}</div>
           <div className="active-bar-chips">
             {norm(query) && (
               <button type="button" className="a-chip" onClick={() => setQuery('')}>
@@ -411,14 +429,14 @@ export function MenuPage({ onAddToCart, toast }) {
             {sort !== 'smart' && (
               <button type="button" className="a-chip" onClick={() => setSort('smart')}>
                 <Icons.ArrowUpDown />
-                {sort === 'new_first' ? 'Новинки' : sort === 'price_asc' ? 'Цена ↑' : 'Цена ↓'}
+                {sort === 'new_first' ? t('menu_sort_chip_new') : sort === 'price_asc' ? t('menu_sort_chip_price_up') : t('menu_sort_chip_price_down')}
                 <span className="a-x">×</span>
               </button>
             )}
             {maxPrice != null && (
               <button type="button" className="a-chip" onClick={() => setMaxPrice(null)}>
                 <Icons.Coins />
-                до {effectiveMaxPrice} ₽
+                {t('menu_price_chip', { price: effectiveMaxPrice })}
                 <span className="a-x">×</span>
               </button>
             )}
@@ -429,7 +447,7 @@ export function MenuPage({ onAddToCart, toast }) {
               return (
                 <button key={k} type="button" className="a-chip" onClick={() => toggleInclude(k)}>
                   <Icon />
-                  {f.label}
+                  {t(f.labelKey)}
                   <span className="a-x">×</span>
                 </button>
               );
@@ -441,7 +459,7 @@ export function MenuPage({ onAddToCart, toast }) {
               return (
                 <button key={t} type="button" className="a-chip neg" onClick={() => toggleAllergen(t)}>
                   <Icon />
-                  без {a.label.toLowerCase()}
+                  {t('menu_without', { allergen: t(a.labelKey).toLowerCase() })}
                   <span className="a-x">×</span>
                 </button>
               );
@@ -466,7 +484,7 @@ export function MenuPage({ onAddToCart, toast }) {
               <div className="mc-footer">
                 <div className="mc-price">{dish.price}<span> ₽</span></div>
                 <button className={`add-btn${added.has(dish.id) ? " added" : ""}`} onClick={() => handleAdd(dish)}>
-                  {added.has(dish.id) ? <><Icons.Check /> Добавлено</> : <><Icons.Plus /> В корзину</>}
+                  {added.has(dish.id) ? <><Icons.Check /> {t('added')}</> : <><Icons.Plus /> {t('to_cart')}</>}
                 </button>
               </div>
             </div>

@@ -59,13 +59,20 @@ def create_reservation(
         if wrong:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный столик или ресторан")
 
+        blocked = [tid for tid in table_ids if bool(getattr(table_map[tid], "is_blocked", False))]
+        if blocked:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Столик временно недоступен для брони")
+
         # Check if any of selected tables are already reserved at this time
         existing = db.query(Reservation).filter(
+            Reservation.restaurant_id == reservation.restaurant_id,
             Reservation.date == reservation.date,
             Reservation.time == reservation.time
         ).all()
         occupied = set()
         for r in existing:
+            if bool(getattr(r, "is_cancelled", False)):
+                continue
             for tid in (getattr(r, "table_ids", None) or []):
                 try:
                     occupied.add(int(tid))

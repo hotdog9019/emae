@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../utils/api';
+import { useI18n } from '../../hooks/useI18n';
 
 let vkidScriptPromise = null;
+const VKID_ERR_LOAD = 'vkid_sdk_load_failed';
 
 function loadVkidSdk() {
   if (vkidScriptPromise) return vkidScriptPromise;
@@ -10,7 +12,11 @@ function loadVkidSdk() {
     const existing = document.querySelector('script[data-vkid-sdk="1"]');
     if (existing) {
       existing.addEventListener('load', () => resolve(window.VKIDSDK));
-      existing.addEventListener('error', () => reject(new Error('VKID SDK load failed')));
+      existing.addEventListener('error', () => {
+        const err = new Error(VKID_ERR_LOAD);
+        err.code = VKID_ERR_LOAD;
+        reject(err);
+      });
       return;
     }
     const script = document.createElement('script');
@@ -18,7 +24,11 @@ function loadVkidSdk() {
     script.src = 'https://unpkg.com/@vkid/sdk@2/dist-sdk/umd/index.js';
     script.setAttribute('data-vkid-sdk', '1');
     script.onload = () => resolve(window.VKIDSDK);
-    script.onerror = () => reject(new Error('VKID SDK load failed'));
+    script.onerror = () => {
+      const err = new Error(VKID_ERR_LOAD);
+      err.code = VKID_ERR_LOAD;
+      reject(err);
+    };
     document.head.appendChild(script);
   });
   return vkidScriptPromise;
@@ -26,6 +36,7 @@ function loadVkidSdk() {
 
 export function VkIdLogin({ onLogin, onClose, toast }) {
   const wrapRef = useRef(null);
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -36,7 +47,7 @@ export function VkIdLogin({ onLogin, onClose, toast }) {
         const sdk = await loadVkidSdk();
         if (!mounted) return;
         if (!sdk || !window.VKIDSDK) {
-          throw new Error('VKID SDK is not available.');
+          throw new Error(t('vkid_sdk_unavailable'));
         }
 
         const VKID = window.VKIDSDK;
@@ -58,13 +69,13 @@ export function VkIdLogin({ onLogin, onClose, toast }) {
           oauthList: ['vkid'],
         })
           .on(VKID.WidgetEvents.ERROR, (e) => {
-            toast?.err?.(e?.message || 'VKID error');
+            toast?.err?.(e?.message || t('vkid_err_generic'));
           })
           .on(VKID.OAuthListInternalEvents.LOGIN_SUCCESS, (payload) => {
             const code = payload?.code;
             const deviceId = payload?.device_id;
             if (!code || !deviceId) {
-              toast?.err?.('VKID payload is invalid');
+              toast?.err?.(t('vkid_invalid_data'));
               return;
             }
             VKID.Auth.exchangeCode(code, deviceId)
@@ -76,22 +87,24 @@ export function VkIdLogin({ onLogin, onClose, toast }) {
                   // Keep visible info for debugging without breaking UX.
                   // eslint-disable-next-line no-console
                   console.warn('VKID exchangeCode response:', data);
-                  toast?.err?.('VKID exchange succeeded, but token payload is incomplete.');
+                  toast?.err?.(t('vkid_exchange_incomplete'));
                   return;
                 }
                 const user = await api.auth.loginWithVkid(accessToken, userId, email);
                 onLogin?.(user);
-                toast?.ok?.(`Welcome, ${user?.name || 'guest'}!`);
+                toast?.ok?.(t('toast_welcome_user', { name: user?.name || t('guest') }));
                 onClose?.();
               })
               .catch((e) => {
-                toast?.err?.(e?.message || 'VKID exchangeCode failed');
+                toast?.err?.(e?.message || t('vkid_exchange_failed'));
               });
           });
 
         setError('');
       } catch (e) {
-        setError(e.message || 'Failed to init VKID');
+        const code = e?.code || '';
+        const msg = code ? t(code) : e?.message;
+        setError(msg || t('vkid_init_failed'));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -99,11 +112,10 @@ export function VkIdLogin({ onLogin, onClose, toast }) {
     return () => {
       mounted = false;
     };
-  }, [onClose, onLogin, toast]);
+  }, [onClose, onLogin, t, toast]);
 
-  if (loading) return <div style={{ fontSize: 12, color: 'var(--muted)' }}>Loading VKID...</div>;
+  if (loading) return <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('vkid_loading')}</div>;
   if (error) return <div style={{ fontSize: 12, color: 'var(--muted)' }}>{error}</div>;
 
   return <div ref={wrapRef} />;
 }
-

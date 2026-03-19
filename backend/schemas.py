@@ -169,6 +169,7 @@ class TableResponse(BaseModel):
     restaurant_id: int
     name: str
     seats: int
+    is_blocked: bool = False
 
     class Config:
         from_attributes = True
@@ -184,6 +185,7 @@ class ReservationResponse(BaseModel):
     guests: int
     special_requests: Optional[str]
     is_confirmed: bool
+    is_cancelled: bool = False
     restaurant_id: Optional[int]
     table_id: Optional[int]
     table_ids: List[int] = []
@@ -201,4 +203,5 @@ class ReservationUpdate(BaseModel):
     guests: Optional[int] = None
     special_requests: Optional[str] = None
     is_confirmed: Optional[bool] = None
+    is_cancelled: Optional[bool] = None
 

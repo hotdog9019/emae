@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
+import { useI18n } from '../../hooks/useI18n';
 import { Icons } from '../icons/Icons';
 import { ProModal } from './ProModal';
 import { AdminModal } from '../admin/AdminModal';
 
 export function ProfileModal({ onClose, toast }) {
   const { user, login } = useAuth();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emailCode, setEmailCode] = useState('');
@@ -56,7 +58,7 @@ export function ProfileModal({ onClose, toast }) {
           email: p.email || '',
         });
       } catch (e) {
-        if (!cancelled) toast.err(e.message || 'Failed to load profile.');
+        if (!cancelled) toast.err(e.message || t('profile_load_failed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -64,7 +66,7 @@ export function ProfileModal({ onClose, toast }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, toast]);
+  }, [user?.id, t, toast]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -90,7 +92,7 @@ export function ProfileModal({ onClose, toast }) {
   const save = async () => {
     if (!user?.id) return;
     if (!form.name.trim()) {
-      toast.err('Name is required.');
+      toast.err(t('profile_login_required'));
       return;
     }
     setSaving(true);
@@ -103,9 +105,9 @@ export function ProfileModal({ onClose, toast }) {
       });
       setProfile(updated);
       login({ ...user, name: updated.name || form.name, avatar_url: updated.telegram_photo_url || updated.vk_avatar_url || user.avatar_url });
-      toast.ok('Profile saved.');
+      toast.ok(t('profile_saved'));
     } catch (e) {
-      toast.err(e.message || 'Failed to save profile.');
+      toast.err(e.message || t('profile_save_failed'));
     } finally {
       setSaving(false);
     }
@@ -113,37 +115,38 @@ export function ProfileModal({ onClose, toast }) {
 
   const sendEmailCode = async () => {
     if (!user?.id || !form.email) {
-      toast.err('Email is required.');
+      toast.err(t('profile_email_required'));
       return;
     }
     try {
       await api.auth.sendEmailCode(user.id, form.email.trim());
-      toast.ok('Verification code sent.');
+      toast.ok(t('profile_email_code_sent'));
     } catch (e) {
-      toast.err(e.message || 'Failed to send code.');
+      toast.err(e.message || t('profile_email_code_send_failed'));
     }
   };
 
   const confirmEmailCode = async () => {
     if (!user?.id || !emailCode.trim()) {
-      toast.err('Enter verification code.');
+      toast.err(t('profile_email_code_required'));
       return;
     }
     try {
       const updated = await api.auth.confirmEmailCode(user.id, emailCode.trim());
       setProfile(updated);
       setEmailCode('');
-      toast.ok('Email verified.');
+      toast.ok(t('profile_email_verified'));
     } catch (e) {
-      toast.err(e.message || 'Invalid code.');
+      toast.err(e.message || t('profile_email_code_invalid'));
     }
   };
 
   const connectVk = () => {
     if (!vkClientId || !user?.id) {
-      toast.err('VK login is not configured yet.');
+      toast.err(t('profile_vk_unconfigured'));
       return;
     }
+    window.sessionStorage.setItem('auth_return_to', window.location.pathname || '/');
     const redirectUri = `${window.location.origin}/auth/vk/callback`;
     const params = new URLSearchParams({
       client_id: vkClientId,
@@ -162,9 +165,9 @@ export function ProfileModal({ onClose, toast }) {
       const updated = await api.auth.setProStatus(user.id, enabled);
       setProfile(updated);
       login({ ...user, is_pro: Boolean(updated.is_pro) });
-      toast.ok(enabled ? 'PRO activated.' : 'PRO disabled.');
+      toast.ok(enabled ? t('profile_pro_enabled') : t('profile_pro_disabled'));
     } catch (e) {
-      toast.err(e.message || 'Failed to update PRO status.');
+      toast.err(e.message || t('profile_pro_update_failed'));
     }
   };
 
@@ -173,22 +176,24 @@ export function ProfileModal({ onClose, toast }) {
 
   return (
     <>
-      <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="modal">
-          <div className="m-hdr">
-            <div className="m-ttl"><span className="ico"><Icons.User /></span>Profile</div>
-            <button className="m-x" onClick={onClose}>x</button>
+        <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
+          <div className="modal">
+            <div className="m-hdr">
+            <div className="m-ttl"><span className="ico"><Icons.User /></span>{t('title_profile')}</div>
+            <button type="button" className="m-x" onClick={onClose} aria-label={t('close')}>
+              <Icons.Close />
+            </button>
           </div>
           <div className="m-body">
             {loading ? (
-              <p style={{ color: 'var(--muted)' }}>Loading profile...</p>
+              <p style={{ color: 'var(--muted)' }}>{t('profile_loading')}</p>
             ) : (
               <>
                 {(profile?.telegram_photo_url || profile?.vk_avatar_url) && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
                     <img
                       src={profile.telegram_photo_url || profile.vk_avatar_url}
-                      alt="avatar"
+                      alt={t('avatar_alt')}
                       style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)' }}
                     />
                   </div>
@@ -198,12 +203,12 @@ export function ProfileModal({ onClose, toast }) {
                   <div className="pro-strip-left">
                     <div className="pro-strip-pill"><Icons.Diamond /> PRO</div>
                     <div className="pro-strip-text">
-                      {isPro ? 'Активно: VIP‑привилегии включены' : 'Открой VIP‑бронь, кешбэк и закрытые события'}
+                      {isPro ? t('profile_vip_active') : t('profile_vip_pitch')}
                     </div>
                   </div>
                   <div className="pro-strip-right">
                     <button type="button" className={isPro ? 'btn btn-outline-gold' : 'btn btn-gold'} onClick={() => setProOpen(true)}>
-                      {isPro ? 'Управлять' : 'Перейти на PRO'}
+                      {isPro ? t('profile_manage') : t('profile_upgrade_pro')}
                     </button>
                   </div>
                 </div>
@@ -211,23 +216,23 @@ export function ProfileModal({ onClose, toast }) {
                 {isAdmin && (
                   <div className="pro-strip" style={{ marginTop: -6 }}>
                     <div className="pro-strip-left">
-                      <div className="pro-strip-pill"><Icons.Sliders /> Admin</div>
-                      <div className="pro-strip-text">Чаты, меню, анонсы — управление проектом.</div>
+                      <div className="pro-strip-pill"><Icons.Sliders /> {t('profile_admin')}</div>
+                      <div className="pro-strip-text">{t('profile_admin_desc')}</div>
                     </div>
                     <div className="pro-strip-right">
                       <button type="button" className="btn btn-outline-gold" onClick={() => setAdminOpen(true)}>
-                        Открыть панель
+                        {t('profile_admin_open_panel')}
                       </button>
                     </div>
                   </div>
                 )}
 
                 <div className="events-box">
-                  <div className="events-h"><Icons.Gift /> События</div>
+                  <div className="events-h"><Icons.Gift /> {t('profile_events')}</div>
                   {eventsLoading ? (
-                    <div className="events-muted">Загрузка…</div>
+                    <div className="events-muted">{t('loading')}</div>
                   ) : events.length === 0 ? (
-                    <div className="events-muted">Пока нет анонсов — но мы готовим кое‑что интересное.</div>
+                    <div className="events-muted">{t('profile_events_empty')}</div>
                   ) : (
                     <div className="events-list">
                       {events.slice(0, 3).map((ev) => (
@@ -237,12 +242,12 @@ export function ProfileModal({ onClose, toast }) {
                               {ev.title}
                               {ev.is_private && <span className="event-badge"><Icons.Diamond /> PRO</span>}
                             </div>
-                            <div className="event-date">{ev.starts_at ? String(ev.starts_at).slice(0, 10) : 'soon'}</div>
+                            <div className="event-date">{ev.starts_at ? String(ev.starts_at).slice(0, 10) : t('profile_soon')}</div>
                           </div>
-                          <div className="event-desc">{ev.locked ? 'Доступно в PRO‑версии.' : (ev.description || '')}</div>
+                          <div className="event-desc">{ev.locked ? t('profile_event_locked') : (ev.description || '')}</div>
                           {ev.locked && (
                             <button type="button" className="btn btn-outline-gold" style={{ marginTop: 10 }} onClick={() => setProOpen(true)}>
-                              Открыть в PRO
+                              {t('profile_open_in_pro')}
                             </button>
                           )}
                         </div>
@@ -252,48 +257,51 @@ export function ProfileModal({ onClose, toast }) {
                 </div>
 
                 <div className="fg">
-                  <div className="fl">Name</div>
+                  <div className="fl">{t('auth_username')}</div>
                   <input className="fi" type="text" value={form.name} onChange={(e) => update('name', e.target.value)} />
                 </div>
                 <div className="fg">
-                  <div className="fl">Full name</div>
+                  <div className="fl">{t('profile_full_name')}</div>
                   <input className="fi" type="text" value={form.full_name} onChange={(e) => update('full_name', e.target.value)} />
                 </div>
                 <div className="fi-row">
                   <div className="fg">
-                    <div className="fl">Phone</div>
+                    <div className="fl">{t('phone_label')}</div>
                     <input className="fi" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} />
                   </div>
                   <div className="fg">
-                    <div className="fl">Birth date</div>
+                    <div className="fl">{t('profile_birth_date')}</div>
                     <input className="fi" type="date" value={form.birth_date} onChange={(e) => update('birth_date', e.target.value)} />
                   </div>
                 </div>
 
                 <div className="fg">
-                  <div className="fl">Email {profile?.email_verified ? '(verified)' : '(not verified)'}</div>
+                  <div className="fl">
+                    {t('profile_email')}{' '}
+                    {profile?.email_verified ? t('profile_email_verified_mark') : t('profile_email_not_verified_mark')}
+                  </div>
                   <input className="fi" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="you@example.com" />
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button type="button" className="btn btn-ghost" onClick={sendEmailCode}>Send code</button>
-                    <input className="fi" style={{ maxWidth: 140 }} type="text" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} placeholder="Code" />
-                    <button type="button" className="btn btn-outline-gold" onClick={confirmEmailCode}>Confirm</button>
+                    <button type="button" className="btn btn-ghost" onClick={sendEmailCode}>{t('profile_send_code')}</button>
+                    <input className="fi" style={{ maxWidth: 140 }} type="text" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} placeholder={t('profile_code')} />
+                    <button type="button" className="btn btn-outline-gold" onClick={confirmEmailCode}>{t('auth_confirm')}</button>
                   </div>
                 </div>
 
                 <div className="fg">
-                  <div className="fl">Social accounts</div>
+                  <div className="fl">{t('profile_socials')}</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      Telegram linking via bot is disabled.
+                      {t('profile_telegram_disabled')}
                     </div>
                     <button type="button" className="btn btn-ghost" onClick={connectVk}>
-                      {profile?.vk_username ? `VK: ${profile.vk_username}` : 'Link VK'}
+                      {profile?.vk_username ? `VK: ${profile.vk_username}` : t('profile_link_vk')}
                     </button>
                   </div>
                 </div>
 
                 <button className="submit" onClick={save} disabled={saving || loading}>
-                  {saving ? 'Saving...' : 'Save'}
+                  {saving ? t('profile_saving') : t('profile_save')}
                 </button>
               </>
             )}
@@ -302,11 +310,11 @@ export function ProfileModal({ onClose, toast }) {
 
         <style>{`
           .pro-strip{
-            border: 1px solid rgba(255,255,255,0.10);
+            border: 1px solid var(--glass-border);
             border-radius: var(--r-lg);
             padding: 12px 12px;
             background: radial-gradient(900px 220px at 10% 0%, rgba(201,169,110,0.14), transparent 60%),
-                        rgba(0,0,0,0.18);
+                        var(--glass);
             display:flex;
             align-items:center;
             justify-content:space-between;
@@ -323,14 +331,14 @@ export function ProfileModal({ onClose, toast }) {
             font-size:10px;letter-spacing:2.6px;text-transform:uppercase;white-space:nowrap;
           }
           .pro-strip-pill svg{color:var(--gold);}
-          .pro-strip-text{color:rgba(242,237,230,0.55);font-size:12px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;}
+          .pro-strip-text{color:var(--muted-strong);font-size:12px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;}
           .pro-strip-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
 
           .events-box{
-            border: 1px solid rgba(255,255,255,0.10);
+            border: 1px solid var(--glass-border);
             border-radius: var(--r-lg);
             padding: 12px;
-            background: rgba(0,0,0,0.18);
+            background: var(--glass);
             margin: 16px 0 18px;
           }
           .events-h{
@@ -343,21 +351,21 @@ export function ProfileModal({ onClose, toast }) {
             margin-bottom: 10px;
           }
           .events-h svg{color: var(--gold);}
-          .events-muted{color: rgba(242,237,230,0.45); font-size: 12px; line-height: 1.6;}
+          .events-muted{color: var(--muted); font-size: 12px; line-height: 1.6;}
           .events-list{display:flex;flex-direction:column;gap:10px;}
           .event-card{
-            border:1px solid rgba(255,255,255,0.08);
+            border:1px solid var(--glass-border);
             border-radius: 14px;
             padding: 10px;
-            background: rgba(0,0,0,0.18);
+            background: var(--glass);
           }
           .event-card.locked{
             border-color: rgba(201,169,110,0.20);
-            background: radial-gradient(700px 120px at 10% 0%, rgba(201,169,110,0.14), rgba(0,0,0,0.12));
+            background: radial-gradient(700px 120px at 10% 0%, rgba(201,169,110,0.14), var(--glass));
           }
           .event-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
           .event-title{color: var(--text); font-size: 13px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
-          .event-date{color: rgba(242,237,230,0.42); font-size: 11px; white-space:nowrap;}
+          .event-date{color: var(--muted2); font-size: 11px; white-space:nowrap;}
           .event-badge{
             display:inline-flex;align-items:center;gap:6px;
             padding:4px 8px;border-radius:999px;
@@ -369,7 +377,7 @@ export function ProfileModal({ onClose, toast }) {
             text-transform:uppercase;
           }
           .event-badge svg{color:var(--gold);}
-          .event-desc{margin-top:6px;color: rgba(242,237,230,0.55); font-size: 12px; line-height: 1.55;}
+          .event-desc{margin-top:6px;color: var(--muted-strong); font-size: 12px; line-height: 1.55;}
         `}</style>
       </div>
 

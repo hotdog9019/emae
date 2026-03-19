@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useI18n } from '../hooks/useI18n';
 
 const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/+$/, '');
 
 export function OfficialTelegramLogin() {
+  const { t } = useI18n();
   const wrapRef = useRef(null);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,14 +16,14 @@ export function OfficialTelegramLogin() {
       try {
         const res = await fetch(`${API_BASE}/auth/telegram/official/widget-config`);
         if (!res.ok) {
-          throw new Error('Telegram login is not configured on backend.');
+          throw new Error(t('tg_err_not_configured'));
         }
         const data = await res.json();
         if (!mounted) return;
         setConfig(data);
       } catch (e) {
         if (!mounted) return;
-        setError(e.message || 'Failed to load Telegram login config.');
+        setError(e.message || t('tg_err_load_failed'));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -29,7 +31,7 @@ export function OfficialTelegramLogin() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!wrapRef.current || !config?.bot_username || !config?.auth_url) return;
@@ -47,7 +49,7 @@ export function OfficialTelegramLogin() {
   }, [config]);
 
   if (loading) {
-    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>Loading Telegram login...</div>;
+    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('tg_loading')}</div>;
   }
 
   if (error) {

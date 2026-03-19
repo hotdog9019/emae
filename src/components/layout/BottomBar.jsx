@@ -1,18 +1,25 @@
 import React from 'react';
 import { Icons } from '../icons/Icons';
 import { useAuth } from '../../hooks/useAuth';
+import { useI18n } from '../../hooks/useI18n';
 
-export function BottomBar({ setModal, setPage, setCartOpen, cartCount, toast }) {
+export function BottomBar({ setModal, setCartOpen, cartCount, toast }) {
   const { user } = useAuth();
+  const { t } = useI18n();
   return (
     <div className="btm">
       <div className="btm-left">
-        <button className="btn btn-ghost" onClick={() => toast.ok("PDF: подключите GET /api/v1/menu/pdf")}>
-          <Icons.PDF /> Скачать меню
+        <button type="button" className="btn btn-ghost" onClick={() => toast.ok(t('pdf_stub'))}>
+          <Icons.PDF /> {t('download_menu')}
         </button>
       </div>
-      <button className="btn btn-gold" style={{padding:"12px 24px",fontSize:10,letterSpacing:2}} onClick={() => user ? setCartOpen(true) : setModal("login")}>
-        <Icons.Cart /> Корзина {cartCount > 0 && <span style={{background:"rgba(0,0,0,.22)",borderRadius:20,padding:"2px 8px",fontSize:10}}>{cartCount}</span>}
+      <button
+        type="button"
+        className="btn btn-gold btn-cart"
+        onClick={() => (user ? setCartOpen() : setModal("login"))}
+        aria-label={cartCount > 0 ? t('aria_cart_items', { count: cartCount }) : t('aria_cart_open')}
+      >
+        <Icons.Cart /> {t('cart')} {cartCount > 0 && <span className="btn-count">{cartCount}</span>}
       </button>
     </div>
   );

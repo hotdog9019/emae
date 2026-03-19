@@ -237,8 +237,49 @@ def migrate_legacy_reservations_schema():
         }
         if not cols:
             return
+
+        changed = False
         if "table_ids" not in cols:
             db.execute(text("ALTER TABLE reservations ADD COLUMN table_ids TEXT"))
+            changed = True
+        if "is_confirmed" not in cols:
+            db.execute(text("ALTER TABLE reservations ADD COLUMN is_confirmed BOOLEAN"))
+            changed = True
+        if "is_cancelled" not in cols:
+            db.execute(text("ALTER TABLE reservations ADD COLUMN is_cancelled BOOLEAN"))
+            changed = True
+
+        if changed:
+            db.commit()
+            cols = {
+                row[1] for row in db.execute(text("PRAGMA table_info(reservations)")).fetchall()
+            }
+
+        if "is_confirmed" in cols:
+            db.execute(text("UPDATE reservations SET is_confirmed = COALESCE(is_confirmed, 0)"))
+        if "is_cancelled" in cols:
+            db.execute(text("UPDATE reservations SET is_cancelled = COALESCE(is_cancelled, 0)"))
+        db.commit()
+    finally:
+        db.close()
+
+
+def migrate_legacy_tables_schema():
+    db: Session = SessionLocal()
+    try:
+        cols = {
+            row[1] for row in db.execute(text("PRAGMA table_info(tables)")).fetchall()
+        }
+        if not cols:
+            return
+        if "is_blocked" not in cols:
+            db.execute(text("ALTER TABLE tables ADD COLUMN is_blocked BOOLEAN"))
+            db.commit()
+            cols = {
+                row[1] for row in db.execute(text("PRAGMA table_info(tables)")).fetchall()
+            }
+        if "is_blocked" in cols:
+            db.execute(text("UPDATE tables SET is_blocked = COALESCE(is_blocked, 0)"))
         db.commit()
     finally:
         db.close()
@@ -314,6 +355,7 @@ def seed_events():
 Base.metadata.create_all(bind=engine)
 migrate_legacy_users_schema()
 migrate_legacy_reservations_schema()
+migrate_legacy_tables_schema()
 
 # Создаем приложение FastAPI
 app = FastAPI(

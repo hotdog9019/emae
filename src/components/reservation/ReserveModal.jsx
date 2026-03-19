@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Icons } from '../icons/Icons';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
+import { useI18n } from '../../hooks/useI18n';
 
 export function ReserveModal({ onClose, toast }) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [f, setF] = useState({phone:"",date:"",time:"",guests:2,comment:""});
   const [loading, setLoading] = useState(false);
   const [restaurants, setRestaurants] = useState([]);
@@ -13,22 +15,75 @@ export function ReserveModal({ onClose, toast }) {
   const [occupied, setOccupied] = useState({});
   const [selectedTables, setSelectedTables] = useState(() => new Set());
   const isPro = Boolean(user?.is_pro);
+
+  const normalizeList = (v) => {
+    if (Array.isArray(v)) return v;
+    if (!v || typeof v !== 'object') return [];
+    for (const k of ['items', 'data', 'rows', 'list', 'restaurants', 'tables', 'result']) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+    return [];
+  };
   
   const upd = k => e => setF(p => ({...p, [k]: e.target.value}));
   const times = ["12:00","13:00","14:00","15:00","17:00","18:00","19:00","20:00","21:00"];
-  // layout gap/scaling to control spacing between tables
-  const gapScaleX = 1.12; // >1 increases horizontal spacing, <1 decreases
-  const gapScaleY = 1.06; // >1 increases vertical spacing, <1 decreases
+  const gapScaleX = 1.14;
+  const gapScaleY = 1.18;
+
+  const tableNum = (name) => {
+    const m = String(name || '').match(/(\d+)/);
+    return m ? Number(m[1]) : null;
+  };
+
+  const isBarSeat = (t) => {
+    const n = tableNum(t?.name);
+    return Number.isFinite(n) && n >= 100;
+  };
+
+  const coordsFor = (t) => {
+    const cx = 240;
+    const cy = 160;
+    const x0 = Number(t?.x);
+    const y0 = Number(t?.y);
+    if (!Number.isFinite(x0) || !Number.isFinite(y0)) return null;
+    return {
+      x: (x0 - cx) * gapScaleX + cx,
+      y: (y0 - cy) * gapScaleY + cy,
+    };
+  };
+
+  const chairPoints = (seats, w, h, bar = false) => {
+    const s = Number(seats || 0);
+    if (bar) {
+      return [{ x: 0, y: h / 2 + 8, r: 4 }];
+    }
+    if (s >= 4) {
+      return [
+        { x: 0, y: -h / 2 - 7, r: 4 },
+        { x: 0, y: h / 2 + 7, r: 4 },
+        { x: -w / 2 - 7, y: 0, r: 4 },
+        { x: w / 2 + 7, y: 0, r: 4 },
+      ];
+    }
+    return [
+      { x: -w / 2 - 7, y: 0, r: 4 },
+      { x: w / 2 + 7, y: 0, r: 4 },
+    ];
+  };
   
   useEffect(() => {
     // загрузим список ресторанов
-    api.restaurants.list().then(r => setRestaurants(r)).catch(() => setRestaurants([]));
+    api.restaurants.list()
+      .then((r) => setRestaurants(normalizeList(r)))
+      .catch(() => setRestaurants([]));
   }, []);
 
   useEffect(() => {
     // загрузим таблицы выбранного ресторана
     if (!selectedRest) return setTables([]);
-    api.restaurants.tables(selectedRest).then(t => { setTables(t); setSelectedTables(new Set()); }).catch(() => { setTables([]); setSelectedTables(new Set()); });
+    api.restaurants.tables(selectedRest)
+      .then((tbl) => { setTables(normalizeList(tbl)); setSelectedTables(new Set()); })
+      .catch(() => { setTables([]); setSelectedTables(new Set()); });
   }, [selectedRest]);
 
   useEffect(() => {
@@ -37,6 +92,7 @@ export function ReserveModal({ onClose, toast }) {
     api.reservations.getAll().then(list => {
       const occ = {};
       list.forEach(r => {
+        if (r && r.is_cancelled) return;
         if (r.restaurant_id === selectedRest && r.date === f.date && r.time === f.time) {
           let ids = [];
           if (Array.isArray(r.table_ids)) ids = r.table_ids;
@@ -77,14 +133,16 @@ export function ReserveModal({ onClose, toast }) {
   if (!user) {
     return (
       <div className="modal-ov" onClick={e => e.target === e.currentTarget && onClose()}>
-        <div className="modal" style={{textAlign:"center"}}>
+        <div className="modal modal-sm reserve-need-auth">
           <div className="m-hdr">
-            <div className="m-ttl"><span className="ico">◫</span>Бронирование</div>
-            <button className="m-x" onClick={onClose}>✕</button>
+            <div className="m-ttl"><span className="ico">◫</span>{t('reserve_title')}</div>
+            <button type="button" className="m-x" onClick={onClose} aria-label={t('close')}>
+              <Icons.Close />
+            </button>
           </div>
-          <div className="m-body" style={{padding:"40px 20px"}}>
-            <Icons.User style={{fontSize:"48px", color:"var(--gold)", marginBottom:"16px"}}/>
-            <p style={{fontSize:"16px", marginBottom:"20px"}}>Пожалуйста, <strong>войдите в аккаунт</strong> для бронирования столика</p>
+          <div className="m-body reserve-need-auth-body">
+            <div className="reserve-need-auth-ico"><Icons.User /></div>
+            <p className="reserve-need-auth-text">{t('reserve_need_login')}</p>
           </div>
         </div>
       </div>
@@ -93,12 +151,12 @@ export function ReserveModal({ onClose, toast }) {
   
   const submit = async () => {
     if (!f.phone || !f.date || !f.time) { 
-      toast.err("Заполните обязательные поля"); 
+      toast.err(t('reserve_required_fields')); 
       return; 
     }
-    const ids = Array.from(selectedTables || []);
+      const ids = Array.from(selectedTables || []);
     if (ids.length === 0) {
-      toast.err("Выберите столик на плане");
+      toast.err(t('reserve_pick_table'));
       return;
     }
     setLoading(true);
@@ -115,12 +173,18 @@ export function ReserveModal({ onClose, toast }) {
         ids[0],
         (isPro ? ids : null)
       );
-      const tblWord = ids.length > 1 ? "Столы" : "Столик";
-      const verb = ids.length > 1 ? "забронированы" : "забронирован";
-      toast.ok(`${tblWord} на ${f.guests} ${f.guests === 1 ? "гость" : f.guests < 5 ? "гостя" : "гостей"} ${verb}! 🍽️`); 
+      const tblWord = ids.length > 1 ? t('reserve_tbl_multi') : t('reserve_tbl_single');
+      const verb = ids.length > 1 ? t('reserve_verb_multi') : t('reserve_verb_single');
+      toast.ok(t('reserve_toast_success', { 
+        tableWord: tblWord, 
+        guests: f.guests, 
+        guestWord: t('guests_word', { count: f.guests }),
+        verb, 
+        status: t('reserve_status_pending'),
+      })); 
       onClose();
     } catch (err) {
-      toast.err(err.message || "Ошибка бронирования");
+      toast.err(err.message || t('reserve_error'));
     } finally {
       setLoading(false);
     }
@@ -128,135 +192,272 @@ export function ReserveModal({ onClose, toast }) {
   return (
     <div className="modal-ov" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <div className="m-hdr">
-          <div className="m-ttl"><span className="ico">◫</span>Бронирование</div>
-          <button className="m-x" onClick={onClose}>✕</button>
-        </div>
+          <div className="m-hdr">
+            <div className="m-ttl"><span className="ico">◫</span>{t('reserve_title')}</div>
+          <button type="button" className="m-x" onClick={onClose} aria-label={t('close')}>
+            <Icons.Close />
+          </button>
+          </div>
         <div className="m-body">
           <div className="fg">
-            <div className="fl">Пользователь</div>
+            <div className="fl">{t('user_label')}</div>
             <input className="fi" type="text" placeholder={user.name} value={user.name} disabled style={{opacity:0.7}}/>
           </div>
           <div className="fg">
-            <div className="fl"><Icons.Phone />Телефон</div>
+            <div className="fl"><Icons.Phone />{t('phone_label')}</div>
             <input className="fi" type="tel" placeholder="+7..." value={f.phone} onChange={upd("phone")}/>
           </div>
           <div className="date-row">
             <div className="fg">
-              <div className="fl"><Icons.Cal />Дата</div>
+              <div className="fl"><Icons.Cal />{t('date_label')}</div>
               <input className="fi" type="date" value={f.date} onChange={e => { upd("date")(e); setSelectedTables(new Set()); }} 
-                     min={new Date().toISOString().split("T")[0]} style={{colorScheme:"dark"}}/>
+                     min={new Date().toISOString().split("T")[0]} />
             </div>
             <div className="fg">
-              <div className="fl"><Icons.Clock />Время</div>
+              <div className="fl"><Icons.Clock />{t('time_label')}</div>
               <select className="fi" value={f.time} onChange={upd("time")}>
-                <option value="">Выберите время</option>
+                <option value="">{t('time_pick')}</option>
                 {times.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
           </div>
             <div style={{marginTop:12}}>
               <div className="fg">
-                <div className="fl">Ресторан</div>
-                <select className="fi" value={selectedRest||""} onChange={e => { setSelectedRest(Number(e.target.value)); setSelectedTables(new Set()); }}>
-                  <option value="">Выберите ресторан</option>
+                <div className="fl">{t('restaurant_label')}</div>
+                <select
+                  className="fi"
+                  value={selectedRest || ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedRest(v ? Number(v) : null);
+                    setSelectedTables(new Set());
+                  }}
+                >
+                  <option value="">{t('restaurant_pick')}</option>
                   {restaurants.map(r => <option key={r.id} value={r.id}>{r.address}</option>)}
                 </select>
               </div>
 
               <div style={{marginTop:12}}>
-                <div className="fl" style={{marginBottom:8}}>План столиков</div>
+                <div className="fl" style={{marginBottom:8}}>{t('table_plan')}</div>
                 <div style={{background:"linear-gradient(180deg,#0f0f10, #111111)",borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8}}>
                   <div style={{width:'100%',maxWidth:440,background:"linear-gradient(180deg,#141414,#0a0a0a)",borderRadius:8,position:"relative",overflow:"hidden",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.02)"}}>
-                    {tables.length === 0 && <div style={{padding:20,color:"var(--muted)"}}>Нет данных о столиках</div>}
+                    {tables.length === 0 && <div style={{padding:20,color:"var(--muted)"}}>{t('no_tables')}</div>}
                     {tables.length > 0 && (
                       <div style={{position:'relative',width:'100%',paddingBottom:'66.6667%'}}>
-                        <svg viewBox="0 0 480 320" preserveAspectRatio="xMidYMid meet" style={{position:'absolute',inset:0,width:'100%',height:'100%'}}>
+                        <svg viewBox="0 0 480 320" preserveAspectRatio="xMidYMid meet" shapeRendering="geometricPrecision" style={{position:'absolute',inset:0,width:'100%',height:'100%'}}>
                         <defs>
-                          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.25"/>
+                          <linearGradient id="rsv-floor" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stopColor="rgba(255,255,255,0.06)" />
+                            <stop offset="1" stopColor="rgba(201,169,110,0.04)" />
+                          </linearGradient>
+                          <linearGradient id="rsv-wood" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stopColor="rgba(240,214,160,0.22)" />
+                            <stop offset="1" stopColor="rgba(0,0,0,0.22)" />
+                          </linearGradient>
+                          <radialGradient id="rsv-marble" cx="30%" cy="25%" r="85%">
+                            <stop offset="0" stopColor="rgba(255,255,255,0.18)" />
+                            <stop offset="0.55" stopColor="rgba(240,214,160,0.12)" />
+                            <stop offset="1" stopColor="rgba(0,0,0,0.22)" />
+                          </radialGradient>
+                          <linearGradient id="rsv-leather" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stopColor="rgba(201,169,110,0.18)" />
+                            <stop offset="1" stopColor="rgba(0,0,0,0.32)" />
+                          </linearGradient>
+                          <pattern id="rsv-hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                            <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(242,237,230,0.18)" strokeWidth="2" />
+                          </pattern>
+                          <filter id="rsv-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.28"/>
+                          </filter>
+                          <filter id="rsv-glow" x="-60%" y="-60%" width="220%" height="220%">
+                            <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="rgba(201,169,110,0.55)" floodOpacity="0.9" />
                           </filter>
                         </defs>
-                        {/* layout inspired by second screenshot: left stack, right stack, center tables, bar seats */}
+                        <rect x="10" y="10" width="460" height="300" rx="18" fill="url(#rsv-floor)" stroke="rgba(255,255,255,0.07)" />
+                        <rect x="18" y="238" width="444" height="64" rx="16" fill="rgba(0,0,0,0.20)" stroke="rgba(255,255,255,0.06)" />
+                        <text x="32" y="265" fill="rgba(242,237,230,0.38)" fontSize="10" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial" letterSpacing="2">BAR</text>
                         {(() => {
-                          const layout = [
-                            {num:1,x:70,y:210}, {num:2,x:70,y:170}, {num:3,x:70,y:130}, {num:4,x:70,y:90},
-                            {num:5,x:180,y:60}, {num:6,x:300,y:60}, {num:7,x:380,y:90}, {num:8,x:380,y:130}, {num:9,x:380,y:170}, {num:10,x:380,y:210},
-                            {num:11,x:300,y:200}, {num:12,x:300,y:140}, {num:13,x:200,y:200}, {num:14,x:200,y:140},
-                            {num:100,x:80,y:280}, {num:101,x:140,y:280}, {num:102,x:200,y:280}, {num:103,x:260,y:280}, {num:104,x:320,y:280}, {num:105,x:380,y:280}, {num:106,x:440,y:280}
-                          ];
+                          const variant = selectedRest ? (selectedRest % 3) : 0;
+                          const floor = { x: 10, y: 10, w: 460, h: 300 };
+                          const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+                          const isTableOcc = (tbl) => !!tbl && (!!occupied[tbl.id] || !!occupied[String(tbl.id)]);
 
-                          // map tables by numeric suffix from name (e.g. T1 -> 1)
-                          const tableMap = {};
-                          const freeTables = [];
-                          tables.forEach(t => {
-                            const m = parseInt((t.name||"").replace(/\D/g, ''));
-                            if (!isNaN(m)) tableMap[m] = t;
-                            else freeTables.push(t);
-                          });
+                          const baseCx = 240;
+                          const baseCy = 160;
+                          const rotDeg = variant === 1 ? 6 : variant === 2 ? -6 : 0;
+                          const rot = (rotDeg * Math.PI) / 180;
+                          const sin = rot ? Math.sin(rot) : 0;
+                          const cos = rot ? Math.cos(rot) : 1;
+                          const shiftX = variant === 1 ? 8 : variant === 2 ? -8 : 0;
+                          const shiftY = variant === 1 ? -4 : variant === 2 ? 6 : 0;
 
-                          // fill remaining layout slots with leftover tables in order
-                          let freeIndex = 0;
-                          const slots = layout.map(pos => {
-                            let t = tableMap[pos.num];
-                            if (!t && freeIndex < freeTables.length && pos.num < 100) {
-                              t = freeTables[freeIndex++];
-                            }
-                            return {pos, t};
-                          });
-
-                          // Render using fixed layout positions to keep tables even and non-overlapping.
-                          const isTableOcc = (t) => {
-                            if (!t) return false;
-                            return !!occupied[t.id] || !!occupied[String(t.id)];
+                          const transformPoint = (x, y) => {
+                            if (!rot) return { x: x + shiftX, y: y + shiftY };
+                            const dx = x - baseCx;
+                            const dy = y - baseCy;
+                            return {
+                              x: baseCx + dx * cos - dy * sin + shiftX,
+                              y: baseCy + dx * sin + dy * cos + shiftY,
+                            };
                           };
 
-                          return slots.map(s => {
-                            const pos = s.pos;
-                            const t = s.t;
-                            // Apply gap scaling relative to center to increase/decrease spacing
-                            const centerX = 480 / 2;
-                            const centerY = 320 / 2;
-                            const dx = pos.x - centerX;
-                            const dy = pos.y - centerY;
-                            const cx = Math.round(centerX + dx * gapScaleX) + (selectedRest ? ((selectedRest % 3) - 1) * 2 : 0);
-                            const cy = Math.round(centerY + dy * gapScaleY) + (selectedRest ? ((selectedRest % 5) - 2) * 2 : 0);
-                            const rw = pos.num >= 100 ? 28 : 64;
-                            const rh = pos.num >= 100 ? 28 : 40;
-                            const rx = 8;
-                            const isOcc = isTableOcc(t);
-                            const isSelected = !!t && selectedTables.has(t.id);
-                            const fillFree = '#8de79a';
-                            const fillOcc = '#ff6b6b';
-                            const fillSel = '#ffd97a';
-                            const fill = isOcc ? fillOcc : (isSelected ? fillSel : fillFree);
-                            const textColor = isSelected ? '#0b0b0b' : (isOcc ? '#fff' : '#06160b');
-                            const cursor = (t && !isOcc) ? 'pointer' : 'default';
+                          const fallbackCols = 6;
+                          const fallbackStartX = 64;
+                          const fallbackStartY = 78;
+                          const fallbackStepX = 70;
+                          const fallbackStepY = 62;
 
-                            const animStyle = { transition: 'transform 180ms ease, filter 180ms ease' };
+                          const placements = tables.map((tbl, i) => {
+                            const c0 = coordsFor(tbl);
+                            const c1 = c0 ? transformPoint(c0.x, c0.y) : null;
+                            if (c1) return { tbl, x: c1.x, y: c1.y, i };
+                            const col = i % fallbackCols;
+                            const row = Math.floor(i / fallbackCols);
+                            const fx = fallbackStartX + col * fallbackStepX;
+                            const fy = fallbackStartY + row * fallbackStepY;
+                            const c2 = transformPoint(fx, fy);
+                            return { tbl, x: c2.x, y: c2.y, i };
+                          });
+
+                          return placements.map(({ tbl, x, y, i }) => {
+                            if (!tbl) return null;
+                            const n = tableNum(tbl?.name) ?? (Number.isFinite(Number(tbl?.id)) ? Number(tbl.id) : (i + 1));
+                            const bar = isBarSeat(tbl);
+                            const seats = Math.max(1, Number(tbl?.seats || 2));
+                            const isBlocked = Boolean(tbl?.is_blocked);
+                            const isOcc = isTableOcc(tbl);
+                            const isSelected = selectedTables.has(tbl.id);
+                            const canPick = !isBlocked && !isOcc;
+
+                            const isRound = variant === 1 && !bar;
+                            const isBooth = variant === 2 && !bar;
+
+                            const w = bar ? 26 : seats >= 4 ? 74 : 66;
+                            const h = bar ? 26 : seats >= 4 ? 46 : 40;
+                            const r = isRound ? Math.min(w, h) / 2 : 10;
+
+                            const mX = w / 2 + 18;
+                            const mY = h / 2 + 18;
+                            const cx = clamp(x, floor.x + mX, floor.x + floor.w - mX);
+                            const cy = clamp(y, floor.y + mY, floor.y + floor.h - mY);
+
+                            const chairs = chairPoints(seats, w, h, bar).map((p) => ({ ...p, r: bar ? 3.7 : 4.0 }));
+                            const labelColor = isBlocked ? 'rgba(242,237,230,0.45)' : isOcc ? '#fff' : (isSelected ? '#0b0b0b' : '#f2ede6');
+                            const outline = isSelected ? 'rgba(232,202,144,0.95)' : 'rgba(255,255,255,0.12)';
+                            const fillTop = isRound ? 'url(#rsv-marble)' : isBooth ? 'url(#rsv-leather)' : 'url(#rsv-wood)';
+                            const overlay = isBlocked ? 'url(#rsv-hatch)' : isOcc ? 'rgba(192,71,59,0.28)' : null;
+                            const filter = isSelected ? 'url(#rsv-glow)' : 'url(#rsv-shadow)';
+                            const lift = isSelected ? 'translate(0,-5) scale(1.04)' : undefined;
+                            const dim = isBlocked ? 0.55 : isOcc ? 0.78 : 1;
+
                             return (
-                              <g key={pos.num} transform={`translate(${cx - rw/2}, ${cy - rh/2})`} style={{cursor}} onClick={() => {
-                                if (!t) return;
-                                if (isTableOcc(t)) return; // cannot select occupied
-                                setSelectedTables((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(t.id)) next.delete(t.id);
-                                  else {
-                                    if (!isPro) next.clear();
-                                    next.add(t.id);
-                                  }
-                                  return next;
-                                });
-                              }}>
-                                <rect x={0} y={0} width={rw} height={rh} rx={rx} fill={fill} stroke={isSelected ? 'goldenrod' : 'rgba(0,0,0,0.12)'} strokeWidth={isSelected ? 3 : 1}
-                                  style={animStyle} filter={isSelected ? 'url(#shadow)' : ''} transform={isSelected ? `translate(0,-6) scale(1.04)` : ''} />
-                                {t ? (
-                                  <>
-                                    <text x={rw/2} y={rh/2 - 4} textAnchor="middle" alignmentBaseline="middle" fill={textColor} style={{fontWeight:700,fontSize:14}}>{pos.num}</text>
-                                    <text x={rw/2} y={rh/2 + 12} textAnchor="middle" alignmentBaseline="middle" fill={textColor} style={{fontSize:11}}>{t.seats} мест</text>
-                                  </>
+                              <g
+                                key={tbl.id}
+                                transform={`translate(${cx}, ${cy})`}
+                                onClick={() => {
+                                  if (!canPick) return;
+                                  setSelectedTables((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(tbl.id)) next.delete(tbl.id);
+                                    else {
+                                      if (!isPro) next.clear();
+                                      next.add(tbl.id);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                style={{ cursor: canPick ? 'pointer' : 'not-allowed', opacity: dim }}
+                              >
+                                {chairs.map((c, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={c.x}
+                                    cy={c.y}
+                                    r={c.r}
+                                    fill={isBlocked ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.35)'}
+                                    stroke="rgba(255,255,255,0.10)"
+                                    strokeWidth="1"
+                                  />
+                                ))}
+
+                                {isBooth && (
+                                  <rect
+                                    x={-w / 2 - 8}
+                                    y={-h / 2 - 6}
+                                    width={w + 16}
+                                    height={h + 12}
+                                    rx={14}
+                                    fill="rgba(0,0,0,0.20)"
+                                    stroke="rgba(255,255,255,0.08)"
+                                    strokeWidth="1"
+                                  />
+                                )}
+
+                                {isRound ? (
+                                  <ellipse
+                                    cx="0"
+                                    cy="0"
+                                    rx={w / 2}
+                                    ry={h / 2}
+                                    fill={fillTop}
+                                    stroke={outline}
+                                    strokeWidth={isSelected ? 2.4 : 1.2}
+                                    filter={filter}
+                                    transform={lift}
+                                    style={{ transition: 'transform 160ms ease, filter 160ms ease' }}
+                                  />
                                 ) : (
-                                  <text x={rw/2} y={rh/2} textAnchor="middle" alignmentBaseline="middle" fill="#999" style={{fontSize:12}}>—</text>
+                                  <rect
+                                    x={-w / 2}
+                                    y={-h / 2}
+                                    width={w}
+                                    height={h}
+                                    rx={r}
+                                    fill={fillTop}
+                                    stroke={outline}
+                                    strokeWidth={isSelected ? 2.4 : 1.2}
+                                    filter={filter}
+                                    transform={lift}
+                                    style={{ transition: 'transform 160ms ease, filter 160ms ease' }}
+                                  />
+                                )}
+
+                                {!isRound && (
+                                  <rect x={-w / 2 + 5} y={-h / 2 + 5} width={w - 10} height={h - 10} rx={Math.max(6, r - 3)} fill="rgba(255,255,255,0.04)" />
+                                )}
+                                {isRound && (
+                                  <ellipse cx="0" cy="0" rx={w / 2 - 5} ry={h / 2 - 5} fill="rgba(255,255,255,0.04)" />
+                                )}
+
+                                {overlay && (
+                                  isRound ? (
+                                    <ellipse cx="0" cy="0" rx={w / 2} ry={h / 2} fill={overlay} />
+                                  ) : (
+                                    <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={r} fill={overlay} />
+                                  )
+                                )}
+
+                                <text x="0" y={bar ? 4 : -2} textAnchor="middle" alignmentBaseline="middle" fill={labelColor} style={{ fontWeight: 700, fontSize: bar ? 11 : 13 }}>
+                                  {n}
+                                </text>
+                                {!bar && (
+                                  <text x="0" y="14" textAnchor="middle" alignmentBaseline="middle" fill={labelColor} style={{ fontSize: 10, opacity: 0.9 }}>
+                                    {t('seats', { count: seats })}
+                                  </text>
+                                )}
+
+                                {isBlocked && (
+                                  <g transform={`translate(${w / 2 - 6}, ${-h / 2 + 6})`}>
+                                    <circle cx="0" cy="0" r="8" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.18)" />
+                                    <path d="M-3 0h6" stroke="rgba(242,237,230,0.75)" strokeWidth="2" strokeLinecap="round" />
+                                  </g>
+                                )}
+                                {!isBlocked && isOcc && (
+                                  <g transform={`translate(${w / 2 - 6}, ${-h / 2 + 6})`}>
+                                    <circle cx="0" cy="0" r="8" fill="rgba(192,71,59,0.28)" stroke="rgba(192,71,59,0.55)" />
+                                    <path d="M-3 -3l6 6M3 -3l-6 6" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" />
+                                  </g>
                                 )}
                               </g>
                             );
@@ -266,16 +467,17 @@ export function ReserveModal({ onClose, toast }) {
                     </div>
                     )}
                   </div>
-                  <div style={{display:"flex",gap:12,alignItems:"center",color:"#ddd"}}>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"#8de79a",borderRadius:4,display:"inline-block"}}/> свободен</div>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"#ff6b6b",borderRadius:4,display:"inline-block"}}/> занят</div>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"#ffd97a",borderRadius:4,display:"inline-block",border:"2px solid goldenrod"}}/> выбран</div>
+                  <div style={{display:"flex",gap:12,alignItems:"center",color:"#ddd",flexWrap:"wrap"}}>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"linear-gradient(180deg,rgba(240,214,160,0.20),rgba(0,0,0,0.24))",borderRadius:4,display:"inline-block",border:"1px solid rgba(255,255,255,0.10)"}}/> {t('legend_free')}</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"rgba(192,71,59,0.65)",borderRadius:4,display:"inline-block",border:"1px solid rgba(192,71,59,0.95)"}}/> {t('legend_busy')}</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"rgba(232,202,144,0.85)",borderRadius:4,display:"inline-block",border:"2px solid rgba(232,202,144,0.95)"}}/> {t('legend_selected')}</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{width:14,height:14,background:"rgba(255,255,255,0.12)",borderRadius:4,display:"inline-block",border:"1px solid rgba(255,255,255,0.20)"}}/> {t('legend_blocked')}</div>
                   </div>
                 </div>
               </div>
             </div>
           <div className="fg">
-            <div className="fl"><Icons.Users />Количество гостей</div>
+            <div className="fl"><Icons.Users />{t('guests_count_label')}</div>
             <div className="gs-wrap">
               <button className="gs-btn" onClick={() => setF(p => ({...p, guests: Math.max(1, p.guests-1)}))}>
                 <Icons.Minus />
@@ -285,25 +487,25 @@ export function ReserveModal({ onClose, toast }) {
                 <Icons.Plus />
               </button>
               <span className="gs-label">
-                {f.guests === 1 ? "гость" : f.guests < 5 ? "гостя" : "гостей"}
+                {t('guests_word', { count: f.guests })}
               </span>
             </div>
           </div>
           <div className="fg">
-            <div className="fl">Пожелания</div>
-            <textarea className="fi" placeholder="Особые пожелания, аллергии..." 
+            <div className="fl">{t('wishes')}</div>
+            <textarea className="fi" placeholder={t('wishes_ph')} 
                       value={f.comment} onChange={upd("comment")} rows={3} 
                       style={{resize:"none",lineHeight:1.6}}/>
           </div>
           <button className="submit" onClick={submit} disabled={loading || !f.phone || !f.date || !f.time || selectedTables.size === 0}>
-            {loading ? "Бронируем..." : (selectedTables.size > 1 ? "Забронировать столы" : "Забронировать столик")}
+            {loading ? t('reserving') : (selectedTables.size > 1 ? t('reserve_tables') : t('reserve_table'))}
           </button>
           <div style={{marginTop:8,color:'var(--muted)',fontSize:13}}>
-            {selectedTables.size === 0 && <div>Выберите столик на плане (кликните по зелёному столу).</div>}
-            {selectedTables.size > 0 && isPro && <div>Выбрано столов: {selectedTables.size}</div>}
-            {!f.phone && <div>Укажите телефон.</div>}
-            {!f.date && <div>Укажите дату.</div>}
-            {!f.time && <div>Укажите время.</div>}
+            {selectedTables.size === 0 && <div>{t('hint_pick_table')}</div>}
+            {selectedTables.size > 0 && isPro && <div>{t('hint_selected_tables', { count: selectedTables.size })}</div>}
+            {!f.phone && <div>{t('hint_need_phone')}</div>}
+            {!f.date && <div>{t('hint_need_date')}</div>}
+            {!f.time && <div>{t('hint_need_time')}</div>}
           </div>
         </div>
       </div>

@@ -138,6 +138,7 @@ class Reservation(Base):
     guests = Column(Integer, nullable=False)
     special_requests = Column(Text, nullable=True)
     is_confirmed = Column(Boolean, default=False)
+    is_cancelled = Column(Boolean, default=False)
     restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=True, index=True)
     table_id = Column(Integer, ForeignKey("tables.id"), nullable=True, index=True)
     # JSON array of table ids (for PRO multi-table reservations)
@@ -190,6 +191,7 @@ class Table(Base):
     seats = Column(Integer, nullable=False, default=2)
     x = Column(Integer, nullable=True)
     y = Column(Integer, nullable=True)
+    is_blocked = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

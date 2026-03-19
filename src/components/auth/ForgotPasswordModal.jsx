@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Icons } from '../icons/Icons';
 import { fmtPhone } from '../../utils/helpers';
+import { useI18n } from '../../hooks/useI18n';
+import './auth.css';
 
 export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
+  const { t } = useI18n();
   const [step, setStep] = useState('phone'); // phone, code, newpass
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -29,7 +32,7 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
 
   const handleSendCode = async () => {
     if (!phone) {
-      toast.err('Enter phone number.');
+      toast.err(t('auth_phone_required'));
       return;
     }
     setLoading(true);
@@ -37,19 +40,19 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
     setLoading(false);
     setStep('code');
     startTimer();
-    toast.ok('Verification code sent by SMS.');
+    toast.ok(t('auth_sms_sent'));
   };
 
   const handleVerifyCode = async () => {
     if (!code || code.length < 4) {
-      toast.err('Enter code from SMS.');
+      toast.err(t('auth_sms_code_required'));
       return;
     }
     setLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     setLoading(false);
     setStep('newpass');
-    toast.ok('Code verified. Set a new password.');
+    toast.ok(t('auth_sms_code_verified'));
   };
 
   const handleResendCode = async () => {
@@ -58,44 +61,55 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
     await new Promise((r) => setTimeout(r, 1000));
     setLoading(false);
     startTimer();
-    toast.ok('New code sent.');
+    toast.ok(t('auth_sms_code_resent'));
   };
 
   const handleChangePassword = async () => {
     if (newPass.length < 6) {
-      toast.err('Password must be at least 6 characters.');
+      toast.err(t('auth_password_min'));
       return;
     }
     if (newPass !== confirmPass) {
-      toast.err('Passwords do not match.');
+      toast.err(t('auth_passwords_mismatch'));
       return;
     }
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1200));
     setLoading(false);
-    toast.ok('Password changed successfully.');
+    toast.ok(t('auth_password_changed'));
     onBackToLogin();
   };
 
   return (
     <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: '400px' }}>
+      <div className="modal modal-sm">
         <div className="m-hdr">
           <div className="m-ttl">
-            <button className="back-btn" onClick={step === 'phone' ? onBackToLogin : () => setStep('phone')}>
+            <button type="button" className="auth-back-btn" aria-label={t('back')} onClick={step === 'phone' ? onBackToLogin : () => setStep('phone')}>
               <Icons.ArrowLeft />
             </button>
             <span className="ico">*</span>
-            Password reset
+            {t('auth_reset_title')}
           </div>
-          <button className="m-x" onClick={onClose}>x</button>
+          <button type="button" className="m-x" onClick={onClose} aria-label={t('close')}>
+            <Icons.Close />
+          </button>
         </div>
 
-        <div className="m-body">
+        <form
+          className="m-body"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (loading) return;
+            if (step === 'phone') handleSendCode();
+            else if (step === 'code') handleVerifyCode();
+            else handleChangePassword();
+          }}
+        >
           {step === 'phone' && (
             <>
               <div className="fg">
-                <div className="fl"><Icons.Phone /> Phone number</div>
+                <div className="fl"><Icons.Phone /> {t('auth_phone')}</div>
                 <input
                   className="fi"
                   type="tel"
@@ -105,13 +119,14 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
                   autoFocus
                 />
               </div>
-              <p className="hint-text">We will send a verification code to this phone number.</p>
+              <p className="auth-hint">{t('auth_sms_hint')}</p>
               <button
+                type="button"
                 className="submit"
                 onClick={handleSendCode}
                 disabled={loading || !phone}
               >
-                {loading ? 'Sending...' : 'Get code'}
+                {loading ? t('auth_sending') : t('auth_get_code')}
               </button>
             </>
           )}
@@ -119,36 +134,38 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
           {step === 'code' && (
             <>
               <div className="fg">
-                <div className="fl"><Icons.Lock /> SMS code</div>
+                <div className="fl"><Icons.Lock /> {t('auth_sms_code')}</div>
                 <input
                   className="fi"
                   type="text"
-                  placeholder="Enter 4-digit code"
+                  placeholder={t('auth_sms_code_ph')}
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   maxLength="4"
                   autoFocus
                 />
               </div>
-              <div className="timer-row">
+              <div className="auth-timer-row">
                 {!canResend ? (
-                  <span className="timer-text">Request another code in {timer}s</span>
+                  <span className="auth-timer-text">{t('auth_resend_in', { timer })}</span>
                 ) : (
                   <button
-                    className="resend-btn"
+                    type="button"
+                    className="auth-resend-btn"
                     onClick={handleResendCode}
                     disabled={loading}
                   >
-                    Resend code
+                    {t('auth_resend')}
                   </button>
                 )}
               </div>
               <button
+                type="button"
                 className="submit"
                 onClick={handleVerifyCode}
                 disabled={loading || code.length < 4}
               >
-                {loading ? 'Checking...' : 'Confirm'}
+                {loading ? t('auth_checking') : t('auth_confirm')}
               </button>
             </>
           )}
@@ -156,90 +173,44 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
           {step === 'newpass' && (
             <>
               <div className="fg">
-                <div className="fl"><Icons.Lock /> New password</div>
+                <div className="fl"><Icons.Lock /> {t('auth_new_password')}</div>
                 <input
                   className="fi"
                   type="password"
-                  placeholder="At least 6 characters"
+                  placeholder={t('auth_password_min_ph')}
                   value={newPass}
                   onChange={(e) => setNewPass(e.target.value)}
                   autoFocus
                 />
               </div>
               <div className="fg">
-                <div className="fl"><Icons.Lock /> Repeat password</div>
+                <div className="fl"><Icons.Lock /> {t('auth_password_repeat')}</div>
                 <input
                   className="fi"
                   type="password"
-                  placeholder="Repeat password"
+                  placeholder={t('auth_password_repeat_ph')}
                   value={confirmPass}
                   onChange={(e) => setConfirmPass(e.target.value)}
                 />
               </div>
               <button
+                type="button"
                 className="submit"
                 onClick={handleChangePassword}
                 disabled={loading || !newPass || !confirmPass}
               >
-                {loading ? 'Saving...' : 'Save new password'}
+                {loading ? t('auth_saving') : t('auth_save_new_password')}
               </button>
             </>
           )}
-        </div>
+        </form>
 
         <div className="m-ftr">
           <p>
-            <button type="button" className="link-like" onClick={onBackToLogin}>Back to login</button>
+            <button type="button" className="link-like" onClick={onBackToLogin}>{t('auth_back_to_login')}</button>
           </p>
         </div>
       </div>
-
-      <style>{`
-        .back-btn {
-          background: none;
-          border: none;
-          color: var(--gold);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          padding: 0 8px 0 0;
-          font-size: 16px;
-        }
-        .back-btn:hover {
-          opacity: 0.8;
-        }
-        .hint-text {
-          font-size: 11px;
-          color: var(--muted);
-          text-align: center;
-          margin: -10px 0 20px;
-          line-height: 1.5;
-        }
-        .timer-row {
-          text-align: center;
-          margin: -10px 0 20px;
-        }
-        .timer-text {
-          font-size: 11px;
-          color: var(--muted);
-        }
-        .resend-btn {
-          background: none;
-          border: none;
-          color: var(--gold);
-          font-size: 11px;
-          text-decoration: underline;
-          cursor: pointer;
-          padding: 4px 8px;
-        }
-        .resend-btn:hover:not(:disabled) {
-          color: var(--gold2);
-        }
-        .resend-btn:disabled {
-          opacity: 0.3;
-          cursor: not-allowed;
-        }
-      `}</style>
     </div>
   );
 }

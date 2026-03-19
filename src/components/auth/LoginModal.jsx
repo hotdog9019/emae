@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../icons/Icons';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
+import { useI18n } from '../../hooks/useI18n';
 import { OfficialTelegramLogin } from '../../Telegram/OfficialTelegramLogin';
 import { VkIdLogin } from './VkIdLogin';
+import './auth.css';
 
 export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
   const [name, setName] = useState('');
@@ -16,6 +18,7 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
     vk_client_id: '',
   });
   const { login } = useAuth();
+  const { t } = useI18n();
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +45,10 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
     try {
       const user = await api.auth.login(name, pass);
       login(user);
-      toast.ok(`Welcome, ${user.name}!`);
+      toast.ok(t('auth_welcome_back', { name: user.name || t('guest') }));
       onClose();
     } catch (err) {
-      toast.err(err.message || 'Login failed');
+      toast.err(err.message || t('auth_login_failed'));
     } finally {
       setLoading(false);
     }
@@ -54,9 +57,10 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
   const handleGoogleLogin = () => {
     const clientId = oauthConfig.google_client_id;
     if (!clientId) {
-      toast.err('Google login is not configured yet.');
+      toast.err(t('auth_google_unconfigured'));
       return;
     }
+    window.sessionStorage.setItem('auth_return_to', window.location.pathname || '/');
     const redirectUri = `${window.location.origin}/auth/google/callback`;
     const params = new URLSearchParams({
       client_id: clientId,
@@ -73,9 +77,10 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
   const handleVkLogin = () => {
     const clientId = oauthConfig.vk_client_id;
     if (!clientId) {
-      toast.err('VK login is not configured yet.');
+      toast.err(t('auth_vk_unconfigured'));
       return;
     }
+    window.sessionStorage.setItem('auth_return_to', window.location.pathname || '/');
     const redirectUri = `${window.location.origin}/auth/vk/callback`;
     const params = new URLSearchParams({
       client_id: clientId,
@@ -91,39 +96,46 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
     <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="m-hdr">
-          <div className="m-ttl"><span className="ico">*</span>Login</div>
-          <button className="m-x" onClick={onClose}>x</button>
+          <div className="m-ttl"><span className="ico">*</span>{t('auth_signin_title')}</div>
+          <button type="button" className="m-x" onClick={onClose} aria-label={t('close')}>
+            <Icons.Close />
+          </button>
         </div>
 
-        <div className="m-body">
+        <form
+          className="m-body"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
           <div className="fg">
-            <div className="fl"><Icons.User />Username</div>
-            <input className="fi" type="text" placeholder="Your username" value={name} onChange={(e) => setName(e.target.value)} />
+            <div className="fl"><Icons.User />{t('auth_username')}</div>
+            <input className="fi" type="text" placeholder={t('auth_username_ph')} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="fg">
-            <div className="fl"><Icons.Lock />Password</div>
+            <div className="fl"><Icons.Lock />{t('auth_password')}</div>
             <input
               className="fi"
               type="password"
-              placeholder="Enter password"
+              placeholder={t('auth_password_ph')}
               value={pass}
               onChange={(e) => setPass(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
             />
           </div>
 
-          <button className="submit" onClick={submit} disabled={loading || !name || !pass}>
-            {loading ? 'Signing in...' : 'Continue'}
+          <button type="submit" className="submit" disabled={loading || !name || !pass}>
+            {loading ? t('auth_signin_loading') : t('auth_signin_btn')}
           </button>
 
-          <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <div style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: 10, fontSize: 12 }}>Other sign-in methods</div>
+          <div className="auth-divider">
+            <div className="auth-divider-title">{t('auth_other_methods')}</div>
 
             <div className="social-row" onClick={() => { if (showTelegramWidget) setShowTelegramWidget(false); if (showVkWidget) setShowVkWidget(false); }}>
               <button
                 type="button"
                 className="social-btn social-telegram"
-                aria-label="Sign in with Telegram"
+                aria-label={t('auth_via_telegram')}
                 onClick={(e) => { e.stopPropagation(); setShowTelegramWidget((s) => !s); setShowVkWidget(false); }}
                 disabled={loading}
               >
@@ -132,7 +144,7 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
               <button
                 type="button"
                 className="social-btn social-google"
-                aria-label="Sign in with Google"
+                aria-label={t('auth_via_google')}
                 onClick={(e) => { e.stopPropagation(); handleGoogleLogin(); }}
                 disabled={loading}
               >
@@ -141,7 +153,7 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
               <button
                 type="button"
                 className="social-btn social-vk"
-                aria-label="Sign in with VK"
+                aria-label={t('auth_via_vk')}
                 onClick={(e) => { e.stopPropagation(); setShowVkWidget((s) => !s); setShowTelegramWidget(false); }}
                 disabled={loading}
               >
@@ -150,29 +162,28 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
 
               {showTelegramWidget && (
                 <div className="social-popover" onClick={(e) => e.stopPropagation()}>
-                  <div className="social-popover-title">Telegram sign in</div>
+                  <div className="social-popover-title">{t('auth_popover_telegram')}</div>
                   <div className="social-popover-body">
                     <OfficialTelegramLogin />
                   </div>
-                  <button type="button" className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 10 }} onClick={() => setShowTelegramWidget(false)}>
-                    Close
+                  <button type="button" className="btn btn-ghost auth-popover-btn" onClick={() => setShowTelegramWidget(false)}>
+                    {t('close')}
                   </button>
                 </div>
               )}
 
               {showVkWidget && (
                 <div className="social-popover" onClick={(e) => e.stopPropagation()}>
-                  <div className="social-popover-title">VK sign in</div>
+                  <div className="social-popover-title">{t('auth_popover_vk')}</div>
                   <div className="social-popover-body">
                     <VkIdLogin onLogin={login} onClose={() => setShowVkWidget(false)} toast={toast} />
                   </div>
                   <button
                     type="button"
-                    className="btn btn-outline-gold"
-                    style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}
+                    className="btn btn-outline-gold auth-popover-btn"
                     onClick={() => handleVkLogin()}
                   >
-                    Use classic VK OAuth
+                    {t('auth_vk_oauth_btn')}
                   </button>
                 </div>
               )}
@@ -180,34 +191,14 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
           </div>
 
           <div className="forgot-row">
-            <button className="forgot-link" onClick={onForgotPassword}>Forgot password?</button>
+            <button type="button" className="forgot-link" onClick={onForgotPassword}>{t('auth_forgot')}</button>
           </div>
-        </div>
+        </form>
 
         <div className="m-ftr">
-          <p>No account yet? <button type="button" className="link-like" onClick={onRegister}>Create account</button></p>
+          <p>{t('auth_no_account')} <button type="button" className="link-like" onClick={onRegister}>{t('auth_create')}</button></p>
         </div>
       </div>
-
-      <style>{`
-        .forgot-row {
-          text-align: right;
-          margin: 12px 0 0;
-        }
-        .forgot-link {
-          background: none;
-          border: none;
-          color: var(--muted);
-          font-size: 11px;
-          text-decoration: underline;
-          cursor: pointer;
-          padding: 4px;
-          transition: color 0.2s;
-        }
-        .forgot-link:hover {
-          color: var(--gold);
-        }
-      `}</style>
     </div>
   );
 }

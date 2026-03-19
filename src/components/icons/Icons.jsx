@@ -250,6 +250,46 @@ export const Icons = {
     </svg>
   ),
 
+  Globe: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a16 16 0 0 1 0 20"/>
+      <path d="M12 2a16 16 0 0 0 0 20"/>
+      <path d="M4 7h16"/>
+      <path d="M4 17h16"/>
+    </svg>
+  ),
+
+  Sun: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2"/>
+      <path d="M12 20v2"/>
+      <path d="M4.93 4.93l1.41 1.41"/>
+      <path d="M17.66 17.66l1.41 1.41"/>
+      <path d="M2 12h2"/>
+      <path d="M20 12h2"/>
+      <path d="M4.93 19.07l1.41-1.41"/>
+      <path d="M17.66 6.34l1.41-1.41"/>
+    </svg>
+  ),
+
+  Moon: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.6A8.5 8.5 0 0 1 11.4 3a7.5 7.5 0 1 0 9.6 9.6z"/>
+    </svg>
+  ),
+
+  Kettlebell: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 7a3 3 0 0 1 6 0v1H9V7z"/>
+      <path d="M7 12a5 5 0 0 1 10 0v2a6 6 0 0 1-10 0v-2z"/>
+      <path d="M9 8V7"/>
+      <path d="M15 8V7"/>
+    </svg>
+  ),
+
   Download: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -511,6 +551,13 @@ export const Icons = {
       <path d="M5 6l3-3 3 3" />
       <path d="M16 21V3" />
       <path d="M13 18l3 3 3-3" />
+    </svg>
+  ),
+
+  Send: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 2L11 13" />
+      <path d="M22 2l-7 20-4-9-9-4 20-7z" />
     </svg>
   ),
 };
