@@ -452,12 +452,12 @@ export function MenuPage({ onAddToCart, toast }) {
                 </button>
               );
             })}
-            {Array.from(excludedAllergens).map((t) => {
-              const a = ALLERGEN_BY_TAG.get(t);
+            {Array.from(excludedAllergens).map((tag) => {
+              const a = ALLERGEN_BY_TAG.get(tag);
               if (!a) return null;
               const Icon = a.icon;
               return (
-                <button key={t} type="button" className="a-chip neg" onClick={() => toggleAllergen(t)}>
+                <button key={tag} type="button" className="a-chip neg" onClick={() => toggleAllergen(tag)}>
                   <Icon />
                   {t('menu_without', { allergen: t(a.labelKey).toLowerCase() })}
                   <span className="a-x">×</span>

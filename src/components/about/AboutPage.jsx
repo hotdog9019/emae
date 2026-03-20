@@ -179,15 +179,25 @@ export function AboutPage({ setPage, setModal }) {
         .rv-stars{color:var(--gold2);letter-spacing:1px;font-size:12px;white-space:nowrap;}
         .review-text{color:var(--muted-strong);font-size:12px;line-height:1.7;}
 
+        @media(max-width:1280px){
+          .about-page{padding:56px 28px;}
+        }
         @media(max-width:980px){
+          .about-page{padding:48px 20px;}
           .about-grid{grid-template-columns:1fr;}
           .about-wide{grid-column:auto;}
+          .reviews-grid{grid-template-columns:1fr 1fr;}
+        }
+        @media(max-width:640px){
           .reviews-grid{grid-template-columns:1fr;}
+          .about-strip{flex-direction:column;align-items:flex-start;}
         }
         @media(max-width:540px){
-          .about-page{padding:40px 20px;}
+          .about-page{padding:36px 16px;}
           .chef{flex-direction:column;}
           .chef-img{width:100%;height:160px;}
+          .about-cta{flex-direction:column;}
+          .about-cta .btn{width:100%;justify-content:center;}
         }
       `}</style>
     </div>

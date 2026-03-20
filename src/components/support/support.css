@@ -233,6 +233,21 @@
 .sw-send:disabled{opacity:.45;cursor:not-allowed;}
 .sw-send svg{transform:none;color:var(--gold);}
 
+@media (max-width: 540px){
+  .sw-tab{
+    top:auto;
+    bottom:80px;
+    transform:none;
+    border-radius:14px 0 0 14px;
+  }
+  .sw-tab:hover{transform:translateX(-2px);}
+  .sw-wrap{
+    right:10px;
+    bottom:10px;
+    width:calc(100vw - 20px);
+    height:min(520px, calc(100vh - 20px));
+  }
+}
 @media (max-width: 420px){
   .sw-head-actions{width:100%;justify-content:space-between;}
   .sw-modes{flex:1;justify-content:space-between;}

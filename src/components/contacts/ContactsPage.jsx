@@ -303,29 +303,55 @@ export function ContactsPage({ toast }) {
           margin-bottom: 24px;
         }
 
+        @media (max-width: 1280px) {
+          .contacts-page {
+            padding: 56px 28px;
+          }
+        }
+
         @media (max-width: 900px) {
+          .contacts-page {
+            padding: 48px 20px;
+          }
           .contacts-grid {
             grid-template-columns: 1fr;
+            gap: 24px;
           }
-          
+
+          .contacts-info {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .social-card {
+            grid-column: span 2;
+          }
+          .map-card { grid-column: span 2; }
+
+          .social-links {
+            flex-wrap: wrap;
+            gap: 16px;
+          }
+        }
+
+        @media (max-width: 640px) {
           .contacts-info {
             grid-template-columns: 1fr;
           }
-          
           .social-card {
             grid-column: span 1;
           }
           .map-card { grid-column: span 1; }
-          
-          .social-links {
-            flex-direction: column;
-            gap: 12px;
-          }
         }
 
         @media (max-width: 540px) {
           .contacts-page {
-            padding: 40px 20px;
+            padding: 36px 16px;
+          }
+          .info-card, .form-card {
+            padding: 20px 16px;
+          }
+          .social-links {
+            gap: 14px;
           }
         }
       `}</style>
