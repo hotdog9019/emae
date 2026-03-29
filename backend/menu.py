@@ -14,6 +14,7 @@ class MenuItemCreate(BaseModel):
     cat: str
     name: str
     price: int = 0
+    discount_percent: int = 0
     weight: str | None = None
     badge: str | None = None
     tags: list[str] = []
@@ -27,6 +28,7 @@ class MenuItemUpdate(BaseModel):
     cat: str | None = None
     name: str | None = None
     price: int | None = None
+    discount_percent: int | None = None
     weight: str | None = None
     badge: str | None = None
     tags: list[str] | None = None
@@ -88,6 +90,7 @@ def _payload(item: MenuItem) -> dict:
         "cat": item.cat,
         "name": item.name,
         "price": item.price,
+        "discount_percent": int(getattr(item, "discount_percent", 0) or 0),
         "weight": item.weight or "",
         "badge": item.badge or "",
         "tags": _tags_from_json(item.tags_json),
@@ -126,10 +129,15 @@ def create_item(payload: MenuItemCreate, admin_id: int, db: Session = Depends(ge
     name = (payload.name or "").strip()
     if not cat or not name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cat and name are required")
+
+    discount_percent = int(payload.discount_percent or 0)
+    if discount_percent < 0 or discount_percent > 90:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="discount_percent must be 0..90")
     item = MenuItem(
         cat=cat,
         name=name,
         price=int(payload.price or 0),
+        discount_percent=discount_percent,
         weight=(payload.weight or "").strip() or None,
         badge=(payload.badge or "").strip() or None,
         tags_json=_tags_to_json(payload.tags or []),
@@ -159,6 +167,11 @@ def update_item(item_id: int, payload: MenuItemUpdate, admin_id: int, db: Sessio
         item.name = (data["name"] or "").strip()
     if "price" in data and data["price"] is not None:
         item.price = int(data["price"])
+    if "discount_percent" in data and data["discount_percent"] is not None:
+        discount_percent = int(data["discount_percent"])
+        if discount_percent < 0 or discount_percent > 90:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="discount_percent must be 0..90")
+        item.discount_percent = discount_percent
     if "weight" in data:
         item.weight = (data["weight"] or "").strip() or None
     if "badge" in data:
@@ -190,4 +203,3 @@ def delete_item(item_id: int, admin_id: int, db: Session = Depends(get_db)):
     db.delete(item)
     db.commit()
     return {"ok": True}
-

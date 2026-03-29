@@ -285,6 +285,34 @@ def migrate_legacy_tables_schema():
         db.close()
 
 
+def migrate_legacy_menu_items_schema():
+    db: Session = SessionLocal()
+    try:
+        cols = {
+            row[1] for row in db.execute(text("PRAGMA table_info(menu_items)")).fetchall()
+        }
+        if not cols:
+            return
+
+        changed = False
+        if "discount_percent" not in cols:
+            db.execute(text("ALTER TABLE menu_items ADD COLUMN discount_percent INTEGER"))
+            changed = True
+
+        if changed:
+            db.commit()
+            cols = {
+                row[1] for row in db.execute(text("PRAGMA table_info(menu_items)")).fetchall()
+            }
+
+        if "discount_percent" in cols:
+            db.execute(text("UPDATE menu_items SET discount_percent = COALESCE(discount_percent, 0)"))
+
+        db.commit()
+    finally:
+        db.close()
+
+
 def seed_menu_items():
     db: Session = SessionLocal()
     try:
@@ -356,6 +384,7 @@ Base.metadata.create_all(bind=engine)
 migrate_legacy_users_schema()
 migrate_legacy_reservations_schema()
 migrate_legacy_tables_schema()
+migrate_legacy_menu_items_schema()
 
 # Создаем приложение FastAPI
 app = FastAPI(

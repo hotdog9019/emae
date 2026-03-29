@@ -244,7 +244,18 @@ function AppContent() {
   const addToCart = useCallback((dish) => {
     setCart((c) => {
       const ex = c.find((i) => i.id === dish.id);
-      return ex ? c.map((i) => (i.id === dish.id ? { ...i, qty: i.qty + 1 } : i)) : [...c, { ...dish, qty: 1 }];
+      if (!ex) return [...c, { ...dish, qty: 1 }];
+
+      const incomingHasDiscountInfo = dish && (dish.discount_percent !== undefined || dish.base_price !== undefined);
+      const merged = { ...ex, ...dish };
+
+      if (!incomingHasDiscountInfo && Number(ex.discount_percent || 0) > 0) {
+        merged.price = ex.price;
+        merged.base_price = ex.base_price;
+        merged.discount_percent = ex.discount_percent;
+      }
+
+      return c.map((i) => (i.id === dish.id ? { ...merged, qty: i.qty + 1 } : i));
     });
   }, []);
 

@@ -11,9 +11,25 @@ const CAT_KEY = {
   Напитки: 'cat_drinks',
 };
 
+const clampPercent = (raw) => {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(90, Math.round(n)));
+};
+
+const finalPrice = (basePrice, discountPercent) => {
+  const base = Number(basePrice || 0);
+  const disc = clampPercent(discountPercent);
+  if (!disc) return base;
+  return Math.max(0, Math.round(base * (100 - disc) / 100));
+};
+
 export function DishModal({ dish, onClose, onAdd, toast }) {
   const { t } = useI18n();
   const catLabel = CAT_KEY[dish?.cat] ? t(CAT_KEY[dish.cat]) : dish?.cat;
+  const basePrice = Number((dish && (dish.base_price ?? dish.price)) || 0);
+  const disc = clampPercent(dish?.discount_percent || 0);
+  const fp = finalPrice(basePrice, disc);
   return (
     <div className="modal-ov" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal-md">
@@ -42,7 +58,15 @@ export function DishModal({ dish, onClose, onAdd, toast }) {
           <div className="dish-desc">{dish.desc}</div>
           <div className="dish-ingr"><strong>{t('dish_composition')}: </strong>{dish.ingr}</div>
           <div className="dish-actions">
-            <div className="dish-price">{dish.price}<sup> ₽</sup></div>
+            <div className={disc > 0 ? 'dish-price-wrap' : undefined}>
+              <div className="dish-price">{disc > 0 ? fp : basePrice}<sup> ₽</sup></div>
+              {disc > 0 && (
+                <div className="dish-price-sub">
+                  <span className="dish-price-was">{basePrice} ₽</span>
+                  <span className="dish-price-disc">-{disc}%</span>
+                </div>
+              )}
+            </div>
             <button type="button" className="btn btn-gold btn-hero" onClick={() => { 
               onAdd(dish); 
               toast.ok(t('toast_in_cart', { name: dish.name })); 

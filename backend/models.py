@@ -241,6 +241,7 @@ class MenuItem(Base):
     cat = Column(String, nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
     price = Column(Integer, nullable=False, default=0)
+    discount_percent = Column(Integer, nullable=False, default=0)
     weight = Column(String, nullable=True)
     badge = Column(String, nullable=True)
     tags_json = Column(Text, nullable=True)

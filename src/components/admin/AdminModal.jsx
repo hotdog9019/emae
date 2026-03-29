@@ -1,9 +1,79 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../utils/api';
+import { loadDishStatsState, resetDishStatsState, saveDishStatsState, upsertAndAdvanceDishStatsState } from '../../utils/fakeDishStats';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
 import { Icons } from '../icons/Icons';
 import './admin.css';
+
+function fmtDuration(ms) {
+  const total = Math.max(0, Math.round(Number(ms || 0) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h <= 0) return `${m}m`;
+  if (m <= 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function clampPercent(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(90, Math.round(n)));
+}
+
+function finalPrice(price, discountPercent) {
+  const base = Number(price || 0);
+  const disc = clampPercent(discountPercent);
+  return Math.max(0, Math.round(base * (100 - disc) / 100));
+}
+
+function buildSparkPoints(data, w, h, pad = 2) {
+  const arr = Array.isArray(data) ? data.map((x) => Number(x) || 0) : [];
+  if (arr.length === 0) return '';
+  const min = Math.min(...arr);
+  const max = Math.max(...arr);
+  const range = max - min || 1;
+  const innerW = Math.max(1, w - pad * 2);
+  const innerH = Math.max(1, h - pad * 2);
+  const step = arr.length <= 1 ? 0 : innerW / (arr.length - 1);
+  return arr
+    .map((v, i) => {
+      const x = pad + step * i;
+      const y = pad + (1 - (v - min) / range) * innerH;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+function AdminSparkline({ data, width = 96, height = 26 }) {
+  const pts = buildSparkPoints(data, width, height, 2);
+  if (!pts) return null;
+  return (
+    <svg className="admin-spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
+      <polyline points={pts} fill="none" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AdminLineChart({ data, height = 140 }) {
+  const w = 100;
+  const h = 40;
+  const pts = buildSparkPoints(data, w, h, 2);
+  if (!pts) return null;
+  const area = `${pts} 98,38 2,38`;
+  return (
+    <svg className="admin-chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ height }} aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="adminChartFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(201,169,110,0.35)" />
+          <stop offset="100%" stopColor="rgba(201,169,110,0.00)" />
+        </linearGradient>
+      </defs>
+      <polyline points={area} fill="url(#adminChartFill)" stroke="none" />
+      <polyline points={pts} fill="none" stroke="var(--gold2)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export function AdminModal({ onClose, toast }) {
   const { user } = useAuth();
@@ -33,6 +103,16 @@ export function AdminModal({ onClose, toast }) {
     ingr: '',
     is_active: true,
   });
+  const [stopQuery, setStopQuery] = useState('');
+  const [stopUpdatingId, setStopUpdatingId] = useState(null);
+
+  const [discountDraft, setDiscountDraft] = useState({});
+  const [discountUpdatingId, setDiscountUpdatingId] = useState(null);
+
+  const [dishStats, setDishStats] = useState(() => loadDishStatsState());
+  const [statsNow, setStatsNow] = useState(() => Date.now());
+  const [statsQuery, setStatsQuery] = useState('');
+  const [statsSort, setStatsSort] = useState('orders24h_desc');
 
   const [eventsLoading, setEventsLoading] = useState(false);
   const [events, setEvents] = useState([]);
@@ -61,6 +141,122 @@ export function AdminModal({ onClose, toast }) {
 
   const selectedThread = useMemo(() => threads.find((thr) => thr.id === selectedId) || null, [selectedId, threads]);
   const restaurantById = useMemo(() => new Map(adminRestaurants.map((r) => [r.id, r])), [adminRestaurants]);
+
+  const stopList = useMemo(() => {
+    const q = String(stopQuery || '').trim().toLowerCase();
+    if (!q) return menuItems;
+    return menuItems.filter((it) => {
+      const hay = `${it?.name || ''} ${it?.cat || ''} #${it?.id || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [menuItems, stopQuery]);
+
+  const stopActive = useMemo(() => stopList.filter((it) => Boolean(it?.is_active)), [stopList]);
+  const stopInactive = useMemo(() => stopList.filter((it) => !it?.is_active), [stopList]);
+
+  const statsRows = useMemo(() => {
+    const sum = (arr) => (Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x) || 0), 0) : 0);
+    const safe48 = (raw) => {
+      const arr = Array.isArray(raw) ? raw.map((x) => Math.max(0, Math.floor(Number(x) || 0))) : [];
+      const out = arr.slice(-48);
+      while (out.length < 48) out.unshift(0);
+      return out;
+    };
+
+    const now = Number(statsNow || Date.now());
+
+    const rows = menuItems.map((it) => {
+      const id = it?.id != null ? String(it.id) : '';
+      const entry = id ? dishStats?.dishes?.[id] : null;
+      const series48 = safe48(entry?.last48h);
+      const prev24 = sum(series48.slice(0, 24));
+      const last24 = sum(series48.slice(24));
+      const last1 = series48[47] || 0;
+      const delta24h = last24 - prev24;
+      const trend = delta24h > 0 ? 'up' : delta24h < 0 ? 'down' : 'flat';
+
+      const firstSeenAt = Number(entry?.firstSeenAt || 0);
+      const startsInMs = firstSeenAt ? Math.max(0, firstSeenAt + 60 * 60 * 1000 - now) : 0;
+      const ageH = firstSeenAt ? Math.max(0, (now - firstSeenAt) / (60 * 60 * 1000)) : 0;
+
+      const curDisc = clampPercent(it.discount_percent || 0);
+      const basePrice = Number(it.price || 0);
+      const priceNow = finalPrice(basePrice, curDisc);
+
+      const totalOrders = Math.max(0, Math.floor(Number(entry?.totalOrders ?? (prev24 + last24))));
+      const revenue24h = priceNow * last24;
+      const revenuePrev24h = priceNow * prev24;
+
+      return {
+        it,
+        series48,
+        series24: series48.slice(24),
+        totalOrders,
+        orders24h: last24,
+        ordersPrev24h: prev24,
+        orders1h: last1,
+        delta24h,
+        trend,
+        ageH,
+        startsInMs,
+        priceNow,
+        revenue24h,
+        revenuePrev24h,
+      };
+    });
+
+    const max24 = rows.reduce((m, r) => Math.max(m, r.orders24h || 0), 0) || 1;
+    return rows.map((r) => {
+      const demand = (r.orders24h || 0) / max24;
+      let suggested = 0;
+      if (demand < 0.12) suggested = 30;
+      else if (demand < 0.22) suggested = 25;
+      else if (demand < 0.35) suggested = 20;
+      else if (demand < 0.55) suggested = 10;
+      else if (demand < 0.75) suggested = 5;
+
+      const demandTier = demand >= 0.72 ? 'high' : demand >= 0.42 ? 'mid' : 'low';
+      return { ...r, demand, demandTier, suggestedDiscount: suggested };
+    });
+  }, [dishStats, menuItems, statsNow]);
+
+  const statsFilteredSorted = useMemo(() => {
+    const q = String(statsQuery || '').trim().toLowerCase();
+    const filtered = !q ? statsRows : statsRows.filter((r) => {
+      const it = r.it || {};
+      const hay = `${it?.name || ''} ${it?.cat || ''} #${it?.id || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+
+    const list = filtered.slice();
+    if (statsSort === 'name_asc') return list.sort((a, b) => String(a.it?.name || '').localeCompare(String(b.it?.name || '')));
+    if (statsSort === 'revenue24h_desc') return list.sort((a, b) => (b.revenue24h || 0) - (a.revenue24h || 0));
+    if (statsSort === 'orders_total_desc') return list.sort((a, b) => (b.totalOrders || 0) - (a.totalOrders || 0));
+    // default: orders24h desc
+    return list.sort((a, b) => (b.orders24h || 0) - (a.orders24h || 0));
+  }, [statsQuery, statsRows, statsSort]);
+
+  const statsSummary = useMemo(() => {
+    const totalByHour = Array.from({ length: 24 }, (_, idx) => statsRows.reduce((s, r) => s + (Number(r.series24?.[idx]) || 0), 0));
+    const total24h = totalByHour.reduce((s, x) => s + (Number(x) || 0), 0);
+    const totalPrev24h = statsRows.reduce((s, r) => s + (Number(r.ordersPrev24h) || 0), 0);
+    const delta24h = total24h - totalPrev24h;
+
+    const byCat = new Map();
+    for (const r of statsRows) {
+      const cat = String(r.it?.cat || '');
+      if (!cat) continue;
+      byCat.set(cat, (byCat.get(cat) || 0) + (Number(r.orders24h) || 0));
+    }
+    const cats = Array.from(byCat.entries()).map(([cat, orders]) => ({ cat, orders }))
+      .sort((a, b) => b.orders - a.orders);
+
+    const newDishes = statsRows
+      .filter((r) => (Number(r.startsInMs || 0) > 0) || (Number(r.ageH || 0) < 2))
+      .sort((a, b) => (a.startsInMs || 0) - (b.startsInMs || 0));
+
+    return { totalByHour, total24h, totalPrev24h, delta24h, cats, newDishes };
+  }, [statsRows]);
 
   const loadThreads = async () => {
     if (!adminId) return;
@@ -157,6 +353,45 @@ export function AdminModal({ onClose, toast }) {
     } finally {
       setMenuLoading(false);
     }
+  };
+
+  const toggleMenuActive = async (it, nextActive) => {
+    if (!adminId || !it?.id) return;
+    setStopUpdatingId(it.id);
+    const prevActive = Boolean(it.is_active);
+    setMenuItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, is_active: Boolean(nextActive) } : x)));
+    try {
+      await api.menu.adminUpdate(adminId, it.id, { is_active: Boolean(nextActive) });
+      toast?.ok?.(nextActive ? t('admin_stoplist_restored') : t('admin_stoplist_added'));
+    } catch (e) {
+      setMenuItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, is_active: prevActive } : x)));
+      toast?.err?.(e.message || t('admin_err_toggle_stoplist'));
+    } finally {
+      setStopUpdatingId(null);
+    }
+  };
+
+  const applyDiscount = async (it, rawPercent) => {
+    if (!adminId || !it?.id) return;
+    const percent = clampPercent(rawPercent);
+    setDiscountUpdatingId(it.id);
+    const prev = clampPercent(it.discount_percent || 0);
+    setMenuItems((p) => p.map((x) => (x.id === it.id ? { ...x, discount_percent: percent } : x)));
+    try {
+      await api.menu.adminUpdate(adminId, it.id, { discount_percent: percent });
+      toast?.ok?.(percent ? t('admin_discount_applied', { percent }) : t('admin_discount_cleared'));
+    } catch (e) {
+      setMenuItems((p) => p.map((x) => (x.id === it.id ? { ...x, discount_percent: prev } : x)));
+      toast?.err?.(e.message || t('admin_err_discount'));
+    } finally {
+      setDiscountUpdatingId(null);
+    }
+  };
+
+  const resetStatsDemo = () => {
+    resetDishStatsState();
+    setDishStats({ v: 3, dishes: {} });
+    toast?.ok?.(t('admin_stats_reset_done'));
   };
 
   const startCreateMenu = () => {
@@ -407,6 +642,12 @@ export function AdminModal({ onClose, toast }) {
   }, [tab]);
 
   useEffect(() => {
+    if (tab !== 'stoplist' && tab !== 'stats') return;
+    loadMenu();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  useEffect(() => {
     if (tab !== 'events') return;
     loadEvents();
     startCreateEvent();
@@ -440,6 +681,33 @@ export function AdminModal({ onClose, toast }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminTablesRestaurantId, tab]);
 
+  useEffect(() => {
+    if (tab !== 'stats') return;
+
+    const tick = () => {
+      const now = Date.now();
+      setStatsNow(now);
+      setDishStats((prev) => {
+        const next = upsertAndAdvanceDishStatsState(prev, menuItems, now);
+        if (next.changed) saveDishStatsState(next.state);
+        return next.state;
+      });
+    };
+
+    tick();
+    const id = setInterval(tick, 10_000);
+    return () => clearInterval(id);
+  }, [menuItems, tab]);
+
+  useEffect(() => {
+    if (tab !== 'stats') return;
+    const id = setInterval(() => {
+      loadMenu();
+    }, 60_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
   return (
     <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal admin-modal">
@@ -456,6 +724,12 @@ export function AdminModal({ onClose, toast }) {
           </button>
           <button type="button" className={`admin-tab${tab === 'menu' ? ' on' : ''}`} onClick={() => setTab('menu')}>
             <Icons.Sliders /> {t('admin_tab_menu')}
+          </button>
+          <button type="button" className={`admin-tab${tab === 'stoplist' ? ' on' : ''}`} onClick={() => setTab('stoplist')}>
+            <Icons.Alert /> {t('admin_tab_stoplist')}
+          </button>
+          <button type="button" className={`admin-tab${tab === 'stats' ? ' on' : ''}`} onClick={() => setTab('stats')}>
+            <Icons.Percent /> {t('admin_tab_stats')}
           </button>
           <button type="button" className={`admin-tab${tab === 'events' ? ' on' : ''}`} onClick={() => setTab('events')}>
             <Icons.Gift /> {t('admin_tab_events')}
@@ -790,6 +1064,251 @@ export function AdminModal({ onClose, toast }) {
                   <button type="button" className="btn btn-gold" onClick={saveMenu}>
                     <Icons.Sparkles /> {t('admin_save')}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'stoplist' && (
+            <div className="admin-split">
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div>
+                    <div className="admin-panel-title">{t('admin_stoplist_active')}</div>
+                    <div className="admin-muted">{t('admin_stoplist_count', { count: stopActive.length })}</div>
+                  </div>
+                  <div className="admin-tools">
+                    <input className="fi admin-mini" value={stopQuery} onChange={(e) => setStopQuery(e.target.value)} placeholder={t('admin_stoplist_search_ph')} />
+                    <button type="button" className="btn btn-ghost" onClick={loadMenu} disabled={menuLoading}>
+                      <Icons.Refresh /> {t('refresh')}
+                    </button>
+                  </div>
+                </div>
+                <div className="admin-panel-scroll">
+                  {menuLoading && <div className="admin-muted">{t('loading')}</div>}
+                  {!menuLoading && stopActive.length === 0 && <div className="admin-muted">{t('admin_stoplist_empty_active')}</div>}
+                  {stopActive.map((it) => (
+                    <div key={it.id} className="admin-row">
+                      <div className="admin-row-main">
+                        <div className="admin-row-name">{it.name}</div>
+                        <div className="admin-row-sub">{it.cat} · {it.price} ₽</div>
+                      </div>
+                      <div className="admin-row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost admin-stop-btn"
+                          onClick={() => toggleMenuActive(it, false)}
+                          disabled={stopUpdatingId === it.id}
+                          title={t('admin_to_stoplist')}
+                        >
+                          <Icons.XIcon /> {t('admin_to_stoplist')}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div>
+                    <div className="admin-panel-title">{t('admin_stoplist_tab')}</div>
+                    <div className="admin-muted">{t('admin_stoplist_count', { count: stopInactive.length })}</div>
+                  </div>
+                  <button type="button" className="btn btn-ghost" onClick={() => setStopQuery('')}>{t('admin_clear')}</button>
+                </div>
+                <div className="admin-panel-scroll">
+                  {menuLoading && <div className="admin-muted">{t('loading')}</div>}
+                  {!menuLoading && stopInactive.length === 0 && <div className="admin-muted">{t('admin_stoplist_empty')}</div>}
+                  {stopInactive.map((it) => (
+                    <div key={it.id} className="admin-row">
+                      <div className="admin-row-main">
+                        <div className="admin-row-name">
+                          {it.name}
+                          <span className="admin-row-off">{t('admin_stoplisted')}</span>
+                        </div>
+                        <div className="admin-row-sub">{it.cat} · {it.price} ₽</div>
+                      </div>
+                      <div className="admin-row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost admin-stop-btn"
+                          onClick={() => toggleMenuActive(it, true)}
+                          disabled={stopUpdatingId === it.id}
+                          title={t('admin_restore_from_stoplist')}
+                        >
+                          <Icons.Check /> {t('admin_restore_from_stoplist')}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'stats' && (
+            <div className="admin-split">
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div>
+                    <div className="admin-panel-title">{t('admin_stats_title')}</div>
+                    <div className="admin-muted">{t('admin_stats_auto')}</div>
+                  </div>
+                  <div className="admin-tools">
+                    <input className="fi admin-mini" value={statsQuery} onChange={(e) => setStatsQuery(e.target.value)} placeholder={t('admin_stats_search_ph')} />
+                    <select className="fi admin-mini admin-select" value={statsSort} onChange={(e) => setStatsSort(e.target.value)} aria-label={t('admin_stats_sort')}>
+                      <option value="orders24h_desc">{t('admin_stats_sort_24h')}</option>
+                      <option value="revenue24h_desc">{t('admin_stats_sort_revenue')}</option>
+                      <option value="orders_total_desc">{t('admin_stats_sort_total')}</option>
+                      <option value="name_asc">{t('admin_stats_sort_name')}</option>
+                    </select>
+                    <button type="button" className="btn btn-ghost" onClick={resetStatsDemo} title={t('admin_stats_reset')}>
+                      <Icons.Trash /> {t('admin_stats_reset')}
+                    </button>
+                    <button type="button" className="btn btn-ghost" onClick={loadMenu} disabled={menuLoading}>
+                      <Icons.Refresh /> {t('refresh')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="admin-panel-scroll">
+                  {menuLoading && <div className="admin-muted">{t('loading')}</div>}
+                  {!menuLoading && statsRows.length === 0 && <div className="admin-muted">{t('admin_menu_empty')}</div>}
+                  {!menuLoading && statsRows.length > 0 && statsFilteredSorted.length === 0 && <div className="admin-muted">{t('admin_stats_no_match')}</div>}
+                  {statsFilteredSorted.map((r, idx) => {
+                    const it = r.it;
+                    const curDisc = clampPercent(it.discount_percent || 0);
+                    const suggested = r.suggestedDiscount;
+                    const basePrice = Number(it.price || 0);
+                    const fp = r.priceNow;
+                    const draft = discountDraft[it.id] ?? String(curDisc);
+                    const demandKey = r.demandTier === 'high' ? 'admin_demand_high' : r.demandTier === 'mid' ? 'admin_demand_mid' : 'admin_demand_low';
+                    const deltaTxt = `${r.delta24h > 0 ? '+' : ''}${r.delta24h}`;
+                    return (
+                      <div key={it.id} className="admin-row admin-stats-row">
+                        <div className="admin-row-main">
+                          <div className="admin-row-name">
+                            <span className="admin-rank">#{idx + 1}</span>
+                            {it.name}
+                            {!it.is_active && <span className="admin-row-off">{t('admin_off')}</span>}
+                            {curDisc > 0 && <span className="admin-disc-pill">-{curDisc}%</span>}
+                            {r.startsInMs > 0 && <span className="admin-new-pill">{t('admin_stats_starts_in', { time: fmtDuration(r.startsInMs) })}</span>}
+                          </div>
+                          <div className="admin-row-sub">
+                            {it.cat} · {t('admin_stats_total_short', { count: r.totalOrders })} · {t('admin_stats_24h_short', { count: r.orders24h })} ({deltaTxt})
+                            {' '}· {t('admin_stats_1h_short', { count: r.orders1h })}
+                            {' '}· {t('admin_stats_price_now', { price: fp })}{curDisc > 0 ? ` (${t('admin_stats_price_was', { price: basePrice })})` : ''}
+                            {' '}· {t('admin_stats_revenue_24h', { price: r.revenue24h })}
+                            {suggested ? ` · ${t('admin_stats_suggest', { percent: suggested })}` : ''}
+                          </div>
+                        </div>
+                        <div className="admin-row-actions admin-stats-actions">
+                          <AdminSparkline data={r.series24} />
+                          <span className={`admin-demand ${r.demandTier}`}>{t(demandKey)}</span>
+                          <div className="admin-discount-ctl">
+                            <input
+                              className="fi admin-discount-inp"
+                              type="number"
+                              min="0"
+                              max="90"
+                              value={draft}
+                              onChange={(e) => setDiscountDraft((p) => ({ ...p, [it.id]: e.target.value }))}
+                              aria-label={t('admin_discount_percent')}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => applyDiscount(it, draft)}
+                              disabled={discountUpdatingId === it.id}
+                            >
+                              {t('admin_apply')}
+                            </button>
+                            {suggested ? (
+                              <button
+                                type="button"
+                                className="btn btn-outline-gold"
+                                onClick={() => { setDiscountDraft((p) => ({ ...p, [it.id]: String(suggested) })); applyDiscount(it, suggested); }}
+                                disabled={discountUpdatingId === it.id || suggested === curDisc}
+                              >
+                                {t('admin_apply_suggested', { percent: suggested })}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => { setDiscountDraft((p) => ({ ...p, [it.id]: '0' })); applyDiscount(it, 0); }}
+                              disabled={discountUpdatingId === it.id || curDisc === 0}
+                            >
+                              {t('reset')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div className="admin-panel-title">{t('admin_stats_dashboard')}</div>
+                </div>
+                <div className="admin-panel-scroll">
+                  <div className="admin-chart-card">
+                    <div className="admin-chart-head">
+                      <div>
+                        <div className="admin-chart-title">{t('admin_stats_chart_24h')}</div>
+                        <div className="admin-muted">
+                          {t('admin_stats_total_24h', { count: statsSummary.total24h })}
+                          {' '}({statsSummary.delta24h > 0 ? '+' : ''}{statsSummary.delta24h})
+                        </div>
+                      </div>
+                      <div className="admin-kpi">
+                        <div className="admin-kpi-v">{statsSummary.total24h}</div>
+                        <div className="admin-kpi-k">{t('admin_stats_orders_24h_short')}</div>
+                      </div>
+                    </div>
+                    <AdminLineChart data={statsSummary.totalByHour} height={150} />
+                  </div>
+
+                  <div className="admin-chart-card">
+                    <div className="admin-chart-title">{t('admin_stats_by_category')}</div>
+                    <div className="admin-bars">
+                      {statsSummary.cats.slice(0, 10).map((c) => {
+                        const max = statsSummary.cats[0]?.orders || 1;
+                        const pct = Math.round((c.orders / max) * 100);
+                        return (
+                          <div key={c.cat} className="admin-bar-row">
+                            <div className="admin-bar-label" title={c.cat}>{c.cat}</div>
+                            <div className="admin-bar-track">
+                              <div className="admin-bar-fill" style={{ width: `${pct}%` }} />
+                            </div>
+                            <div className="admin-bar-val">{c.orders}</div>
+                          </div>
+                        );
+                      })}
+                      {statsSummary.cats.length === 0 && <div className="admin-muted">{t('admin_menu_empty')}</div>}
+                    </div>
+                  </div>
+
+                  <div className="admin-chart-card">
+                    <div className="admin-chart-title">{t('admin_stats_new_dishes')}</div>
+                    {statsSummary.newDishes.slice(0, 8).map((r) => (
+                      <div key={r.it.id} className="admin-suggest-row">
+                        <div className="admin-suggest-name">{r.it.name}</div>
+                        <div className="admin-suggest-pill">
+                          {r.startsInMs > 0 ? t('admin_stats_starts_in', { time: fmtDuration(r.startsInMs) }) : t('admin_stats_warming_up')}
+                        </div>
+                      </div>
+                    ))}
+                    {statsSummary.newDishes.length === 0 && <div className="admin-muted">{t('admin_stats_no_new')}</div>}
+                  </div>
+
+                  <div className="admin-stub">
+                    <div className="admin-stub-h">{t('admin_stats_note_title')}</div>
+                    <div className="admin-muted">{t('admin_stats_note')}</div>
+                  </div>
                 </div>
               </div>
             </div>

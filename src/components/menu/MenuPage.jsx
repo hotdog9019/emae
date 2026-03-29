@@ -9,6 +9,19 @@ import { useI18n } from '../../hooks/useI18n';
 const norm = (v) => String(v || '').trim().toLowerCase();
 const hasTag = (dish, tag) => Array.isArray(dish?.tags) && dish.tags.includes(tag);
 
+const clampPercent = (raw) => {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(90, Math.round(n)));
+};
+
+const effectivePrice = (dish) => {
+  const base = Number(dish?.price || 0);
+  const disc = clampPercent(dish?.discount_percent || 0);
+  if (!disc) return base;
+  return Math.max(0, Math.round(base * (100 - disc) / 100));
+};
+
 const INCLUDE_FILTER_GROUPS = [
   {
     titleKey: 'filters_group_collection',
@@ -143,7 +156,7 @@ export function MenuPage({ onAddToCart, toast }) {
   const filteredByCat = useMemo(() => (cat === ALL_CAT ? menuItems : menuItems.filter((d) => d.cat === cat)), [cat, menuItems]);
 
   const priceBounds = useMemo(() => {
-    const prices = filteredByCat.map((d) => Number(d.price || 0)).filter((n) => Number.isFinite(n) && n > 0);
+    const prices = filteredByCat.map((d) => effectivePrice(d)).filter((n) => Number.isFinite(n) && n > 0);
     const min = prices.length ? Math.min(...prices) : 0;
     const max = prices.length ? Math.max(...prices) : 0;
     return { min, max };
@@ -168,7 +181,7 @@ export function MenuPage({ onAddToCart, toast }) {
         const hay = `${d.name || ''} ${d.desc || ''} ${d.ingr || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (effectiveMaxPrice && Number(d.price) > effectiveMaxPrice) return false;
+      if (effectiveMaxPrice && effectivePrice(d) > effectiveMaxPrice) return false;
       return true;
     });
   }, [effectiveMaxPrice, filteredByCat, query]);
@@ -197,11 +210,11 @@ export function MenuPage({ onAddToCart, toast }) {
     const isNew = (d) => hasTag(d, 'new') || d.badge === 'Новинка';
 
     const list = filtered.slice();
-    if (sort === 'price_asc') return list.sort((a, b) => Number(a.price) - Number(b.price));
-    if (sort === 'price_desc') return list.sort((a, b) => Number(b.price) - Number(a.price));
-    if (sort === 'new_first') return list.sort((a, b) => (Number(isNew(b)) - Number(isNew(a))) || (scoreSmart(b) - scoreSmart(a)) || (Number(a.price) - Number(b.price)));
+    if (sort === 'price_asc') return list.sort((a, b) => effectivePrice(a) - effectivePrice(b));
+    if (sort === 'price_desc') return list.sort((a, b) => effectivePrice(b) - effectivePrice(a));
+    if (sort === 'new_first') return list.sort((a, b) => (Number(isNew(b)) - Number(isNew(a))) || (scoreSmart(b) - scoreSmart(a)) || (effectivePrice(a) - effectivePrice(b)));
     // smart
-    return list.sort((a, b) => (scoreSmart(b) - scoreSmart(a)) || (Number(a.price) - Number(b.price)));
+    return list.sort((a, b) => (scoreSmart(b) - scoreSmart(a)) || (effectivePrice(a) - effectivePrice(b)));
   }, [filtered, sort]);
 
   const activeCount = selectedFilters.size + excludedAllergens.size + (norm(query) ? 1 : 0) + (maxPrice == null ? 0 : 1) + (sort === 'smart' ? 0 : 1);
@@ -241,7 +254,10 @@ export function MenuPage({ onAddToCart, toast }) {
   const allergenCount = (tag) => listForFacets.filter((d) => hasTag(d, tag)).length;
   
   const handleAdd = (dish) => {
-    onAddToCart(dish);
+    const basePrice = Number((dish && (dish.base_price ?? dish.price)) || 0);
+    const disc = clampPercent(dish?.discount_percent || 0);
+    const price = disc ? Math.max(0, Math.round(basePrice * (100 - disc) / 100)) : basePrice;
+    onAddToCart({ ...dish, price, discount_percent: disc, base_price: disc > 0 ? basePrice : undefined });
     toast.ok(t('toast_in_cart', { name: dish.name }));
     setAdded(p => new Set([...p, dish.id]));
     setTimeout(() => setAdded(p => { 
@@ -469,7 +485,11 @@ export function MenuPage({ onAddToCart, toast }) {
       )}
 
       <div className="menu-grid">
-        {filteredSorted.map(dish => (
+        {filteredSorted.map(dish => {
+          const basePrice = Number(dish?.price || 0);
+          const disc = clampPercent(dish?.discount_percent || 0);
+          const fp = effectivePrice(dish);
+          return (
           <div className="menu-card" key={dish.id}>
             <div className="mc-img" onClick={() => setSelected(dish)}>
               <img src={dish.img} alt={dish.name} loading="lazy"/>
@@ -482,14 +502,29 @@ export function MenuPage({ onAddToCart, toast }) {
               <div className="mc-name">{dish.name}</div>
               <div className="mc-desc">{dish.desc}</div>
               <div className="mc-footer">
-                <div className="mc-price">{dish.price}<span> ₽</span></div>
+                <div className="mc-price">
+                  {disc > 0 ? (
+                    <div className="mc-price-stack">
+                      <div className="mc-price-now">{fp}<span> ₽</span></div>
+                      <div className="mc-price-meta">
+                        <span className="mc-price-was">{basePrice} ₽</span>
+                        <span className="mc-price-disc">-{disc}%</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {basePrice}<span> ₽</span>
+                    </>
+                  )}
+                </div>
                 <button className={`add-btn${added.has(dish.id) ? " added" : ""}`} onClick={() => handleAdd(dish)}>
                   {added.has(dish.id) ? <><Icons.Check /> {t('added')}</> : <><Icons.Plus /> {t('to_cart')}</>}
                 </button>
               </div>
             </div>
           </div>
-        ))}
+        );
+        })}
       </div>
       {selected && <DishModal dish={selected} onClose={() => setSelected(null)} onAdd={handleAdd} toast={toast}/>}
     </div>
