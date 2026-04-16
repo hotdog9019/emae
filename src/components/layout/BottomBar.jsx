@@ -8,11 +8,6 @@ export function BottomBar({ setModal, setCartOpen, cartCount, toast }) {
   const { t } = useI18n();
   return (
     <div className="btm">
-      <div className="btm-left">
-        <button type="button" className="btn btn-ghost" onClick={() => toast.ok(t('pdf_stub'))}>
-          <Icons.PDF /> {t('download_menu')}
-        </button>
-      </div>
       <button
         type="button"
         className="btn btn-gold btn-cart"
@@ -24,3 +19,4 @@ export function BottomBar({ setModal, setCartOpen, cartCount, toast }) {
     </div>
   );
 }
+

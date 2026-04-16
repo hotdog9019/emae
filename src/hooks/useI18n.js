@@ -203,6 +203,10 @@ const DICT = {
     cart_pickup_from: 'Самовывоз: откуда',
     cart_delivery_from: 'Доставка: из ресторана',
     cart_pickup_from_ph: 'Выберите ресторан',
+    cart_continue: 'Продолжить',
+    cart_checkout_title: 'Оформление заказа',
+    cart_step_items: 'Корзина',
+    cart_step_checkout: 'Доставка',
     cart_pickup_from_required: 'Выберите ресторан для самовывоза.',
 
     map_title: 'Карта (Яндекс)',
@@ -1021,6 +1025,10 @@ const DICT = {
     cart_delivery_from: 'Delivery: from restaurant',
     cart_pickup_from_ph: 'Select restaurant',
     cart_pickup_from_required: 'Select a restaurant for pickup.',
+    cart_continue: 'Continue',
+    cart_checkout_title: 'Checkout',
+    cart_step_items: 'Cart',
+    cart_step_checkout: 'Delivery',
 
     map_title: 'Map (Yandex)',
     map_search_ph: 'Type address (street, house)…',
@@ -1837,6 +1845,10 @@ const DICT = {
     cart_delivery_from: '配送：从餐厅',
     cart_pickup_from_ph: '选择餐厅',
     cart_pickup_from_required: '请选择自取餐厅。',
+    cart_continue: '继续',
+    cart_checkout_title: '结账',
+    cart_step_items: '购物车',
+    cart_step_checkout: '配送',
 
     map_title: '地图（Yandex）',
     map_search_ph: '输入地址（街道、门牌号）…',
@@ -2466,19 +2478,53 @@ const interpolate = (template, vars) => {
   });
 };
 
+export const DICT_LANGS = Object.keys(DICT);
+export { DICT };
+
+const OVERRIDES_KEY = 'i18n_overrides';
+
+export function getI18nOverrides() {
+  try {
+    const raw = localStorage.getItem(OVERRIDES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setI18nOverrides(overrides) {
+  try {
+    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
+    window.dispatchEvent(new StorageEvent('storage', { key: OVERRIDES_KEY }));
+  } catch { /* ignore */ }
+}
+
 export function useI18n() {
   const { lang, setLang, theme, setTheme } = useUiPrefs();
   const dict = DICT[lang] || DICT.ru;
 
   const t = useMemo(() => {
+    let overrides = {};
+    try {
+      const raw = localStorage.getItem(OVERRIDES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        overrides = (parsed && typeof parsed === 'object' ? parsed[lang] : null) || {};
+      }
+    } catch { /* ignore */ }
+
     return (key, vars) => {
-      const raw = (dict && Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : undefined)
+      const raw = (overrides && Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : undefined)
+        ?? (dict && Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : undefined)
         ?? (Object.prototype.hasOwnProperty.call(DICT.ru, key) ? DICT.ru[key] : undefined)
         ?? key;
       if (typeof raw === 'function') return raw({ ...(vars || {}), lang });
       if (typeof raw === 'string') return vars ? interpolate(raw, vars) : raw;
       return raw;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dict, lang]);
 
   return { lang, setLang, theme, setTheme, t };

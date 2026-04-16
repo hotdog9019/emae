@@ -27,8 +27,13 @@ export function ContactsPage({ toast }) {
       return;
     }
     setSending(true);
-    // Имитация отправки
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 800));
+    // Save to localStorage for admin to review
+    try {
+      const prev = JSON.parse(localStorage.getItem('contact_messages') || '[]');
+      const entry = { id: Date.now(), date: new Date().toISOString(), name: form.name, phone: form.phone, message: form.message, read: false };
+      localStorage.setItem('contact_messages', JSON.stringify([entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 200)));
+    } catch { /* ignore */ }
     setSending(false);
     toast.ok(t('toast_contacts_sent'));
     setForm({ name: "", phone: "", message: "" });

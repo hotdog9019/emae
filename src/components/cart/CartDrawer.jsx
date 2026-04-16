@@ -96,6 +96,7 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
   const { t } = useI18n();
   const { user } = useAuth();
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const [step, setStep] = useState(1);
   const [fulfillment, setFulfillment] = useState('delivery');
   const [fulfillmentTime, setFulfillmentTime] = useState('');
   const [payment, setPayment] = useState('card');
@@ -277,20 +278,101 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
     setShowReview(true);
   };
 
+  // Reset to step 1 when cart becomes empty or drawer reopens
+  useEffect(() => {
+    if (cart.length === 0) setStep(1);
+  }, [cart.length]);
+
   return (
     <>
       <div className="drawer-ov" onClick={onClose}/>
       <div className="drawer">
+        {/* Header */}
         <div className="d-hdr">
-          <div className="d-title">{t('title_cart')}</div>
+          {step === 2 && !showReview ? (
+            <button
+              type="button"
+              className="d-close"
+              onClick={() => setStep(1)}
+              aria-label={t('back')}
+              style={{ marginRight: 8 }}
+            >
+              <Icons.ArrowLeft />
+            </button>
+          ) : null}
+          <div className="d-title" style={{ flex: 1 }}>
+            {showReview
+              ? t('title_cart')
+              : step === 2
+                ? t('cart_checkout_title') || 'Оформление'
+                : t('title_cart')}
+          </div>
           <button type="button" className="d-close" onClick={onClose} aria-label={t('close')}>
             <Icons.Close />
           </button>
         </div>
+
+        {/* Step indicator (shown only when there are items and not in review) */}
+        {cart.length > 0 && !showReview && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0,
+            padding: '0 20px 12px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            {[1, 2].map((s) => (
+              <React.Fragment key={s}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                }}>
+                  <div style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: step >= s ? 'var(--gold)' : 'rgba(255,255,255,0.08)',
+                    border: step >= s ? 'none' : '1px solid rgba(255,255,255,0.14)',
+                    color: step >= s ? '#1a1206' : 'var(--muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                    transition: 'all 0.25s',
+                  }}>{s}</div>
+                  <span style={{
+                    fontSize: 11,
+                    color: step >= s ? 'var(--text)' : 'var(--muted)',
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                    transition: 'color 0.25s',
+                  }}>
+                    {s === 1 ? (t('cart_step_items') || 'Корзина') : (t('cart_step_checkout') || 'Доставка')}
+                  </span>
+                </div>
+                {s < 2 && (
+                  <div style={{
+                    flex: 1,
+                    height: 1,
+                    background: step > s ? 'var(--gold)' : 'rgba(255,255,255,0.10)',
+                    margin: '0 10px',
+                    transition: 'background 0.25s',
+                  }} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+
+        {/* Content area */}
         <div className="d-items">
           {showReview ? (
             <ReviewForm t={t} user={user} onSubmit={() => { setShowReview(false); onClose(); }} onSkip={() => { setShowReview(false); onClose(); }} />
-          ) : (
+          ) : step === 1 ? (
+            /* ── STEP 1: Cart items ── */
             <>
               {activeReservations.length > 0 && (
                 <div className="d-reservation">
@@ -361,12 +443,10 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
                 </div>
               ))}
             </>
-          )}
-        </div>
-        {cart.length > 0 && !showReview && (
-          <div className="d-foot">
-            <div style={{ marginBottom: 14 }}>
-              <div className="fg" style={{ marginBottom: 12 }}>
+          ) : (
+            /* ── STEP 2: Checkout form ── */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <div className="fg" style={{ marginBottom: 14 }}>
                 <div className="fl">{t('cart_fulfillment')}</div>
                 <select className="fi" value={fulfillment} onChange={(e) => setFulfillment(e.target.value)}>
                   <option value="delivery">{t('cart_delivery')}</option>
@@ -374,8 +454,8 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
                 </select>
               </div>
 
-              <div className="fg" style={{ marginBottom: 12 }}>
-                <div className="fl">{fulfillment === 'pickup' ? t('cart_pickup_from') : t('cart_delivery_from')}</div>
+              <div className="fg" style={{ marginBottom: 14 }}>
+                <div className="fl">{t('cart_pickup_from_ph')}</div>
                 <select
                   className="fi"
                   value={sourceRestaurantId}
@@ -391,7 +471,7 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
                 </select>
               </div>
 
-              <div className="fi-row" style={{ marginBottom: 12 }}>
+              <div className="fi-row" style={{ marginBottom: 14, flexDirection: 'row', gap: 8 }}>
                 <div className="fg" style={{ marginBottom: 0 }}>
                   <div className="fl">{t('cart_time')}</div>
                   <input className="fi" type="datetime-local" min={minDateTimeLocal} value={fulfillmentTime} onChange={(e) => setFulfillmentTime(e.target.value)} />
@@ -407,22 +487,27 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
               </div>
 
               {fulfillment === 'delivery' && (
-                <div className="fg" style={{ marginBottom: 12 }}>
+                <div className="fg" style={{ marginBottom: 14 }}>
                   <div className="fl">{t('cart_address')}</div>
-                  <div className="fi-row" style={{ marginBottom: 0 }}>
-                    <input className="fi" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('cart_address_ph')} />
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => setMapOpen(true)}
-                      title={!yandexApiKey ? t('map_no_key_short') : t('cart_choose_on_map')}
-                      style={{ whiteSpace: 'nowrap' }}
-                    >
-                      <Icons.Map /> {t('cart_choose_on_map')}
-                    </button>
-                  </div>
+                  <input
+                    className="fi"
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder={t('cart_address_ph')}
+                    style={{ marginBottom: 8 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setMapOpen(true)}
+                    title={!yandexApiKey ? t('map_no_key_short') : t('cart_choose_on_map')}
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    <Icons.Map /> {t('cart_choose_on_map')}
+                  </button>
                   {user && (
-                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, color: 'var(--muted-strong)', fontSize: 13 }}>
+                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, color: 'var(--muted-strong)', fontSize: 13 }}>
                       <input type="checkbox" checked={saveAddressDefault} onChange={(e) => setSaveAddressDefault(e.target.checked)} />
                       {t('cart_save_address')}
                     </label>
@@ -435,11 +520,33 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
                 <textarea className="fi" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t('cart_comment_ph')} style={{ resize: 'none', lineHeight: 1.5 }} />
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {cart.length > 0 && !showReview && (
+          <div className="d-foot">
             <div className="d-total">
               <span className="d-total-label">{t('total')}</span>
               <span className="d-total-price">{total} ₽</span>
             </div>
-            <button type="button" className="submit no-mt" onClick={checkout}>{t('checkout')}</button>
+            {step === 1 ? (
+              <button
+                type="button"
+                className="submit no-mt"
+                onClick={() => setStep(2)}
+              >
+                {t('cart_continue') || 'Продолжить'} →
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="submit no-mt"
+                onClick={checkout}
+              >
+                {t('checkout')}
+              </button>
+            )}
           </div>
         )}
       </div>

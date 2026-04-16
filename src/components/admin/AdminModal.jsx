@@ -5,6 +5,7 @@ import { useI18n } from '../../hooks/useI18n';
 import { Icons } from '../icons/Icons';
 import { SLIDES, MENU } from '../../data/constants';
 import { makeStorageKey, readJsonStorageWithLegacy } from '../../utils/brand';
+import { DICT, DICT_LANGS, getI18nOverrides, setI18nOverrides } from '../../hooks/useI18n';
 import './admin.css';
 
 const HERO_CONFIG_SUFFIX = 'hero_config';
@@ -119,6 +120,8 @@ export function AdminModal({ onClose, toast }) {
   const [menuEditingId, setMenuEditingId] = useState(null);
   const [menuUploading, setMenuUploading] = useState(false);
   const menuUploadInputRef = useRef(null);
+  const eventUploadInputRef = useRef(null);
+  const [eventUploading, setEventUploading] = useState(false);
   const [menuForm, setMenuForm] = useState({
     cat: '',
     name: '',
@@ -202,7 +205,63 @@ export function AdminModal({ onClose, toast }) {
   // Menu items loaded from API for hero picker
   const [heroMenuItems, setHeroMenuItems] = useState(MENU);
 
+  // Contact messages (from contacts page form, stored in localStorage)
+  const [contactMessages, setContactMessages] = useState([]);
+  const [selectedContactMsg, setSelectedContactMsg] = useState(null);
+
+  // Translations editor
+  const [transLang, setTransLang] = useState('ru');
+  const [transSearch, setTransSearch] = useState('');
+  const [transOverrides, setTransOverrides] = useState(() => getI18nOverrides());
+  const [transSaved, setTransSaved] = useState(false);
+
   const adminId = user?.id;
+
+  const loadContactMessages = () => {
+    try {
+      const raw = localStorage.getItem('contact_messages');
+      const list = raw ? JSON.parse(raw) : [];
+      setContactMessages(Array.isArray(list) ? list : []);
+    } catch {
+      setContactMessages([]);
+    }
+  };
+
+  const markContactRead = (id) => {
+    try {
+      const raw = localStorage.getItem('contact_messages');
+      const list = raw ? JSON.parse(raw) : [];
+      const updated = list.map(m => m.id === id ? { ...m, read: true } : m);
+      localStorage.setItem('contact_messages', JSON.stringify(updated));
+      setContactMessages(updated);
+    } catch { /* ignore */ }
+  };
+
+  const deleteContactMsg = (id) => {
+    try {
+      const raw = localStorage.getItem('contact_messages');
+      const list = raw ? JSON.parse(raw) : [];
+      const updated = list.filter(m => m.id !== id);
+      localStorage.setItem('contact_messages', JSON.stringify(updated));
+      setContactMessages(updated);
+      if (selectedContactMsg?.id === id) setSelectedContactMsg(null);
+    } catch { /* ignore */ }
+  };
+
+  const saveTranslations = () => {
+    setI18nOverrides(transOverrides);
+    setTransSaved(true);
+    setTimeout(() => setTransSaved(false), 2000);
+    toast?.ok?.('Переводы сохранены');
+  };
+
+  const resetTranslation = (lang, key) => {
+    setTransOverrides(prev => {
+      const next = { ...prev, [lang]: { ...(prev[lang] || {}) } };
+      delete next[lang][key];
+      return next;
+    });
+  };
 
   const selectedThread = useMemo(() => threads.find((thr) => thr.id === selectedId) || null, [selectedId, threads]);
   const restaurantById = useMemo(() => new Map(adminRestaurants.map((r) => [r.id, r])), [adminRestaurants]);
@@ -636,6 +695,20 @@ export function AdminModal({ onClose, toast }) {
       toast?.err?.(e.message || 'Не удалось загрузить изображение');
     } finally {
       setMenuUploading(false);
+    }
+  };
+
+  const handleEventImageUpload = async (file) => {
+    if (!adminId || !file) return;
+    setEventUploading(true);
+    try {
+      const uploaded = await api.uploads.image(adminId, file, 'menu');
+      setEventForm((prev) => ({ ...prev, image_url: String(uploaded?.url || '') }));
+      toast?.ok?.('Изображение загружено');
+    } catch (e) {
+      toast?.err?.(e.message || 'Не удалось загрузить изображение');
+    } finally {
+      setEventUploading(false);
     }
   };
 
@@ -1540,6 +1613,12 @@ export function AdminModal({ onClose, toast }) {
           </button>
           <button type="button" className={`admin-tab${tab === 'hero' ? ' on' : ''}`} onClick={() => { setTab('hero'); loadHeroMenuItems(); }}>
             <Icons.Image /> {t('admin_hero_tab')}
+          </button>
+          <button type="button" className={`admin-tab${tab === 'contacts' ? ' on' : ''}`} onClick={() => { setTab('contacts'); loadContactMessages(); }}>
+            <Icons.Message /> Сообщения
+          </button>
+          <button type="button" className={`admin-tab${tab === 'translations' ? ' on' : ''}`} onClick={() => setTab('translations')}>
+            <Icons.Globe /> Переводы
           </button>
         </div>
 
@@ -3345,7 +3424,46 @@ export function AdminModal({ onClose, toast }) {
                   </div>
                   <div className="fg">
                     <div className="fl">{t('admin_field_image')}</div>
-                    <input className="fi" type="text" value={eventForm.image_url} onChange={(e) => setEventForm((p) => ({ ...p, image_url: e.target.value }))} placeholder={t('admin_ph_url')} />
+                    <input
+                      ref={eventUploadInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleEventImageUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <div
+                      className={`admin-upload-drop${eventUploading ? ' busy' : ''}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer?.files?.[0];
+                        if (file) handleEventImageUpload(file);
+                      }}
+                      onClick={() => eventUploadInputRef.current?.click()}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          eventUploadInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      {eventForm.image_url ? (
+                        <img src={eventForm.image_url} alt="" style={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
+                      ) : (
+                        <>
+                          <Icons.Image />
+                          <strong>{eventUploading ? 'Загружаю фото…' : 'Перетащите фото сюда'}</strong>
+                          <span>или нажмите, чтобы выбрать из проводника</span>
+                        </>
+                      )}
+                    </div>
+                    <input className="fi" type="text" style={{ marginTop: 8 }} value={eventForm.image_url} onChange={(e) => setEventForm((p) => ({ ...p, image_url: e.target.value }))} placeholder={t('admin_ph_url')} />
                   </div>
                   <button type="button" className="btn btn-gold" onClick={saveEvent}>
                     <Icons.Gift /> {t('admin_save_event')}
@@ -3559,6 +3677,213 @@ export function AdminModal({ onClose, toast }) {
               </div>
             </div></div>
           )}
+
+          {/* ── CONTACTS tab ── */}
+          {tab === 'contacts' && (
+            <div className="admin-inbox">
+              <div className="admin-threadlist">
+                <div className="admin-threadlist-h">
+                  <div className="admin-threadlist-title">Сообщения с сайта</div>
+                  <button type="button" className="btn btn-ghost" onClick={loadContactMessages}>
+                    <Icons.Refresh /> {t('refresh')}
+                  </button>
+                </div>
+                <div className="admin-threadlist-scroll">
+                  {contactMessages.length === 0 && (
+                    <div className="admin-muted">Сообщений пока нет. Они появятся здесь после заполнения формы на странице «Контакты».</div>
+                  )}
+                  {contactMessages.map((msg) => (
+                    <button
+                      key={msg.id}
+                      type="button"
+                      className={`admin-thread${selectedContactMsg?.id === msg.id ? ' on' : ''}`}
+                      onClick={() => { setSelectedContactMsg(msg); markContactRead(msg.id); }}
+                    >
+                      <div className="admin-thread-name">
+                        {!msg.read && <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)', marginRight: 7, flexShrink: 0 }} />}
+                        {msg.name}
+                      </div>
+                      <div className="admin-thread-preview">{msg.phone}</div>
+                      <div className="admin-thread-preview" style={{ fontSize: 10, marginTop: 2, color: 'var(--muted)' }}>
+                        {new Date(msg.date).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="admin-chat">
+                {!selectedContactMsg ? (
+                  <div className="admin-muted">Выберите сообщение для просмотра</div>
+                ) : (
+                  <>
+                    <div className="admin-chat-h">
+                      <div>
+                        <div className="admin-chat-title">{selectedContactMsg.name}</div>
+                        <div className="admin-chat-sub">{selectedContactMsg.phone} · {new Date(selectedContactMsg.date).toLocaleString('ru-RU')}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline-gold"
+                        onClick={() => deleteContactMsg(selectedContactMsg.id)}
+                      >
+                        <Icons.Trash /> Удалить
+                      </button>
+                    </div>
+                    <div className="admin-chat-list" style={{ padding: '16px 20px' }}>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 'var(--r-md)',
+                        padding: '16px 18px',
+                        color: 'var(--text)',
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        whiteSpace: 'pre-wrap',
+                      }}>
+                        {selectedContactMsg.message || <span style={{ color: 'var(--muted)' }}>Сообщение не указано</span>}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── TRANSLATIONS tab ── */}
+          {tab === 'translations' && (() => {
+            const langs = DICT_LANGS;
+            const baseDict = DICT[transLang] || DICT.ru;
+            const allKeys = Object.keys(baseDict).filter(k => {
+              if (typeof baseDict[k] === 'function') return false;
+              if (!transSearch.trim()) return true;
+              const q = transSearch.toLowerCase();
+              return k.toLowerCase().includes(q) || String(baseDict[k]).toLowerCase().includes(q)
+                || String((transOverrides[transLang] || {})[k] || '').toLowerCase().includes(q);
+            });
+            const overridesForLang = transOverrides[transLang] || {};
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+                {/* Toolbar */}
+                <div className="admin-panel-h" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                  <div className="admin-panel-title">Редактор переводов</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {langs.map(l => (
+                      <button
+                        key={l}
+                        type="button"
+                        className={`btn ${transLang === l ? 'btn-gold' : 'btn-ghost'}`}
+                        style={{ padding: '6px 14px', fontSize: 11, letterSpacing: 1 }}
+                        onClick={() => setTransLang(l)}
+                      >
+                        {l === 'ru' ? '🇷🇺 RU' : l === 'en' ? '🇬🇧 EN' : l === 'zh' ? '🇨🇳 ZH' : l.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    className="fi admin-mini"
+                    type="text"
+                    value={transSearch}
+                    onChange={e => setTransSearch(e.target.value)}
+                    placeholder="Поиск по ключу или тексту…"
+                    style={{ minWidth: 200, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className={`btn ${transSaved ? 'btn-gold' : 'btn-ghost'}`}
+                    onClick={saveTranslations}
+                  >
+                    <Icons.Sparkles /> {transSaved ? 'Сохранено!' : 'Сохранить'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-gold"
+                    title="Сбросить все переводы к умолчанию"
+                    onClick={() => {
+                      if (window.confirm('Сбросить все пользовательские переводы?')) {
+                        setTransOverrides({});
+                        setI18nOverrides({});
+                        toast?.ok?.('Переводы сброшены');
+                      }
+                    }}
+                  >
+                    <Icons.Trash /> Сбросить всё
+                  </button>
+                </div>
+
+                {/* Keys list */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ color: 'var(--muted)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
+                    {allKeys.length} ключей · изменено: {Object.keys(overridesForLang).length}
+                  </div>
+                  {allKeys.map(key => {
+                    const original = String(baseDict[key] || '');
+                    const override = overridesForLang[key];
+                    const hasOverride = override !== undefined;
+                    return (
+                      <div
+                        key={key}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '220px 1fr auto',
+                          gap: 10,
+                          alignItems: 'start',
+                          padding: '10px 12px',
+                          borderRadius: 'var(--r-sm)',
+                          border: `1px solid ${hasOverride ? 'rgba(201,169,110,0.35)' : 'rgba(255,255,255,0.06)'}`,
+                          background: hasOverride ? 'rgba(201,169,110,0.05)' : 'transparent',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 11, color: hasOverride ? 'var(--gold2)' : 'var(--muted)', wordBreak: 'break-all' }}>{key}</div>
+                          {hasOverride && (
+                            <div style={{ fontSize: 11, color: 'rgba(242,237,230,0.40)', marginTop: 3, wordBreak: 'break-word' }}>
+                              Исходный: {original.slice(0, 80)}{original.length > 80 ? '…' : ''}
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          className="fi"
+                          type="text"
+                          value={hasOverride ? override : original}
+                          style={{ fontSize: 13, padding: '8px 12px' }}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setTransOverrides(prev => ({
+                              ...prev,
+                              [transLang]: { ...(prev[transLang] || {}), [key]: val },
+                            }));
+                          }}
+                          onFocus={e => {
+                            // When user starts typing in original, create an override
+                            if (!hasOverride) {
+                              setTransOverrides(prev => ({
+                                ...prev,
+                                [transLang]: { ...(prev[transLang] || {}), [key]: original },
+                              }));
+                            }
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {hasOverride && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              title="Сбросить к исходному"
+                              style={{ padding: '6px 8px' }}
+                              onClick={() => resetTranslation(transLang, key)}
+                            >
+                              <Icons.Refresh />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
