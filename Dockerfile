@@ -5,6 +5,8 @@ RUN npm install
 COPY public ./public
 COPY src ./src
 RUN npm run build
+# Copy photos to build directory for serving on Render
+RUN mkdir -p /app/build/photo && cp -r /app/public/photo/* /app/build/photo/ 2>/dev/null || true
 
 FROM python:3.11-slim
 WORKDIR /app

@@ -483,12 +483,15 @@ project_root = Path(__file__).resolve().parent.parent
 build_dir = project_root / "build"
 build_static = build_dir / "static"
 build_index = build_dir / "index.html"
+build_photo_dir = build_dir / "photo"
 public_photo_dir = project_root / "public" / "photo"
+# Use build/photo if available (Render), fall back to public/photo (dev)
+photo_dir = build_photo_dir if build_photo_dir.exists() else public_photo_dir
 
 if build_static.exists():
     app.mount("/static", StaticFiles(directory=str(build_static)), name="frontend-static")
-if public_photo_dir.exists():
-    app.mount("/photo", StaticFiles(directory=str(public_photo_dir)), name="photo-static")
+if photo_dir.exists():
+    app.mount("/photo", StaticFiles(directory=str(photo_dir)), name="photo-static")
 
 
 @app.get("/{full_path:path}")
