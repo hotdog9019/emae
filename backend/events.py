@@ -73,7 +73,7 @@ def _payload(ev: Event, locked: bool = False) -> dict:
 
 
 @router.get("/")
-def list_events(user_id: int | None = None, db: Session = Depends(get_db)):
+def list_events(user_id: int | None = None, past: bool = False, db: Session = Depends(get_db)):
     is_pro = False
     if user_id:
         try:
@@ -82,9 +82,31 @@ def list_events(user_id: int | None = None, db: Session = Depends(get_db)):
         except Exception:
             is_pro = False
 
-    events = db.query(Event).order_by(desc(Event.starts_at), desc(Event.created_at)).all()
+    now = datetime.utcnow()
+    events_q = db.query(Event).order_by(desc(Event.starts_at), desc(Event.created_at)).all()
     out = []
-    for ev in events:
+    for ev in events_q:
+        # Determine if event is past: starts_at is set and in the past (or ends_at in the past)
+        is_past = False
+        if ev.ends_at:
+            try:
+                ends = ev.ends_at.replace(tzinfo=None) if ev.ends_at.tzinfo else ev.ends_at
+                is_past = ends < now
+            except Exception:
+                pass
+        elif ev.starts_at:
+            try:
+                starts = ev.starts_at.replace(tzinfo=None) if ev.starts_at.tzinfo else ev.starts_at
+                is_past = starts < now
+            except Exception:
+                pass
+
+        # Filter: past=True shows only past events, past=False (default) shows only upcoming/current
+        if past and not is_past:
+            continue
+        if not past and is_past:
+            continue
+
         if ev.is_private and not is_pro:
             out.append(_payload(ev, locked=True))
         else:

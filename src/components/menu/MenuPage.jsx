@@ -119,7 +119,7 @@ const CAT_KEY = {
   Напитки: 'cat_drinks',
 };
 
-export function MenuPage({ onAddToCart, toast }) {
+export function MenuPage({ onAddToCart, onQty, onRemove, cart = [], toast }) {
   const { t } = useI18n();
   const [cat, setCat] = useState(ALL_CAT);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -484,20 +484,32 @@ export function MenuPage({ onAddToCart, toast }) {
         </div>
       )}
 
+      {filteredSorted.length === 0 && (
+        <div className="active-bar" style={{ justifyContent: 'center', padding: '28px 22px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="page-sub" style={{ margin: 0 }}>Ничего не найдено</div>
+            <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>Попробуйте сбросить фильтры или выбрать другую категорию.</div>
+          </div>
+        </div>
+      )}
+
       <div className="menu-grid">
         {filteredSorted.map(dish => {
           const basePrice = Number(dish?.price || 0);
           const disc = clampPercent(dish?.discount_percent || 0);
           const fp = effectivePrice(dish);
+          const cartItem = cart.find(i => i.id === dish.id);
+          const inCartQty = cartItem ? cartItem.qty : 0;
           return (
           <div className="menu-card" key={dish.id}>
             <div className="mc-img" onClick={() => setSelected(dish)}>
               <img src={dish.img} alt={dish.name} loading="lazy"/>
               {dish.badge && <div className="mc-badge">{dish.badge}</div>}
+              {inCartQty > 0 && <div className="mc-cart-badge">{inCartQty}</div>}
             </div>
             <div className="mc-body">
               <div className="mc-tags">
-                {dish.tags.map(t => <span key={t} className={`tag-chip ${t}`}>{t}</span>)}
+                {dish.tags.map(tag => <span key={tag} className={`tag-chip ${tag}`}>{tag}</span>)}
               </div>
               <div className="mc-name">{dish.name}</div>
               <div className="mc-desc">{dish.desc}</div>
@@ -517,9 +529,21 @@ export function MenuPage({ onAddToCart, toast }) {
                     </>
                   )}
                 </div>
-                <button className={`add-btn${added.has(dish.id) ? " added" : ""}`} onClick={() => handleAdd(dish)}>
-                  {added.has(dish.id) ? <><Icons.Check /> {t('added')}</> : <><Icons.Plus /> {t('to_cart')}</>}
-                </button>
+                {inCartQty > 0 ? (
+                  <div className="mc-qty-ctrl">
+                    <button className="mc-qty-btn" onClick={() => onQty ? (inCartQty === 1 ? onRemove(dish.id) : onQty(dish.id, -1)) : null} aria-label={t('qty_decrease')}>
+                      <Icons.Minus />
+                    </button>
+                    <span className="mc-qty-val">{inCartQty}</span>
+                    <button className="mc-qty-btn" onClick={() => onQty ? onQty(dish.id, +1) : handleAdd(dish)} aria-label={t('qty_increase')}>
+                      <Icons.Plus />
+                    </button>
+                  </div>
+                ) : (
+                  <button className={`add-btn${added.has(dish.id) ? " added" : ""}`} onClick={() => handleAdd(dish)}>
+                    {added.has(dish.id) ? <><Icons.Check /> {t('added')}</> : <><Icons.Plus /> {t('to_cart')}</>}
+                  </button>
+                )}
               </div>
             </div>
           </div>

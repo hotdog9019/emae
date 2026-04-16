@@ -53,7 +53,8 @@ export function VkIdLogin({ onLogin, onClose, toast }) {
         const VKID = window.VKIDSDK;
         VKID.Config.init({
           app: 54478211,
-          redirectUrl: 'https://www.emae.space/',
+          // Avoid hard-coded domains (breaks dev/staging and forks).
+          redirectUrl: `${window.location.origin}/`,
           responseMode: VKID.ConfigResponseMode.Callback,
           source: VKID.ConfigSource.LOWCODE,
           scope: '',

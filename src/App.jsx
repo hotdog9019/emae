@@ -9,6 +9,8 @@ import { HeroPage } from './components/hero/HeroPage';
 import { MenuPage } from './components/menu/MenuPage';
 import { ContactsPage } from './components/contacts/ContactsPage';
 import { AboutPage } from './components/about/AboutPage';
+import { ReviewsPage } from './components/reviews/ReviewsPage';
+import { EventsPage } from './components/events/EventsPage';
 import { CartDrawer } from './components/cart/CartDrawer';
 import { LoginModal } from './components/auth/LoginModal';
 import { RegisterModal } from './components/auth/RegisterModal';
@@ -34,6 +36,9 @@ function pageForPath(pathname) {
   if (p === '/menu') return 'menu';
   if (p === '/contacts') return 'contacts';
   if (p === '/about') return 'about';
+  if (p === '/reviews') return 'reviews';
+  if (p === '/events') return 'events';
+  if (p === '/past-events') return 'past-events';
   return 'home';
 }
 
@@ -41,6 +46,9 @@ function pathForPage(page) {
   if (page === 'menu') return '/menu';
   if (page === 'contacts') return '/contacts';
   if (page === 'about') return '/about';
+  if (page === 'reviews') return '/reviews';
+  if (page === 'events') return '/events';
+  if (page === 'past-events') return '/past-events';
   return '/';
 }
 
@@ -52,12 +60,16 @@ function AppContent() {
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [reservation, setReservation] = useState(null);
+  const [reservationVersion, setReservationVersion] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const toast = useToast();
 
   const closeOverlay = useCallback(() => {
-    window.history.back();
-  }, []);
+    const next = { page, modal: null, cartOpen: false };
+    window.history.replaceState(next, '', pathForPage(page));
+    setModal(null);
+    setCartOpen(false);
+  }, [page]);
 
   const navigatePage = useCallback((nextPage) => {
     const next = { page: nextPage, modal: null, cartOpen: false };
@@ -226,12 +238,20 @@ function AppContent() {
           setReservation(null);
           return;
         }
-        const sorted = list.slice().sort((a, b) => {
+        const now = new Date();
+        const upcoming = list.filter(r => {
+          if (r.is_cancelled) return false;
+          try {
+            return new Date(r.date + 'T' + (r.time || '00:00')) >= now;
+          } catch { return true; }
+        });
+        const sorted = upcoming.slice().sort((a, b) => {
           const da = new Date(a.date + 'T' + (a.time || '00:00'));
           const db = new Date(b.date + 'T' + (b.time || '00:00'));
           return da - db;
         });
-        setReservation(sorted[0] || null);
+        const top3 = sorted.slice(0, 3);
+        setReservation(top3.length > 0 ? top3 : null);
       } catch {
         setReservation(null);
       }
@@ -239,7 +259,7 @@ function AppContent() {
     return () => {
       cancelled = true;
     };
-  }, [user, cartOpen]);
+  }, [user, reservationVersion]);
 
   const addToCart = useCallback((dish) => {
     setCart((c) => {
@@ -259,7 +279,11 @@ function AppContent() {
     });
   }, []);
 
-  const setQty = (id, delta) => setCart((c) => c.map((i) => (i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)));
+  const setQty = (id, delta) => setCart((c) => c.flatMap((i) => {
+    if (i.id !== id) return [i];
+    const nextQty = (Number(i.qty) || 0) + (Number(delta) || 0);
+    return nextQty <= 0 ? [] : [{ ...i, qty: nextQty }];
+  }));
   const removeItem = (id) => setCart((c) => c.filter((i) => i.id !== id));
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
@@ -276,9 +300,16 @@ function AppContent() {
       />
 
       {page === 'home' && <HeroPage onAddToCart={addToCart} toast={toast} setPage={navigatePage} setModal={openModal} />}
-      {page === 'menu' && <MenuPage onAddToCart={addToCart} toast={toast} />}
+      {page === 'menu' && <MenuPage onAddToCart={addToCart} onQty={setQty} onRemove={removeItem} cart={cart} toast={toast} />}
       {page === 'about' && <AboutPage setPage={navigatePage} setModal={openModal} />}
       {page === 'contacts' && <ContactsPage toast={toast} />}
+      {page === 'reviews' && <ReviewsPage toast={toast} />}
+      {page === 'events' && <EventsPage past={false} setPage={navigatePage} />}
+      {page === 'past-events' && <EventsPage past={true} setPage={navigatePage} />}
+
+      <div className="site-credit">
+        Сайт создан студией <strong>Жужи</strong>. Дизайн, разработка и поддержка цифрового продукта для ресторана.
+      </div>
 
       <BottomBar setModal={openModal} setCartOpen={openCart} cartCount={cartCount} toast={toast} />
 
@@ -286,7 +317,7 @@ function AppContent() {
       {modal === 'register' && <RegisterModal onClose={closeOverlay} onLogin={() => openModal('login')} toast={toast} />}
       {modal === 'forgot' && <ForgotPasswordModal onClose={closeOverlay} onBackToLogin={() => openModal('login')} toast={toast} />}
       {modal === 'profile' && <ProfileModal onClose={closeOverlay} toast={toast} />}
-      {modal === 'reserve' && <ReserveModal onClose={closeOverlay} toast={toast} />}
+      {modal === 'reserve' && <ReserveModal onClose={closeOverlay} toast={toast} onReservationCreated={() => setReservationVersion(v => v + 1)} />}
       {modal === 'reserve-error' && (
         <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && closeOverlay()}>
           <div className="modal modal-sm">
@@ -309,11 +340,35 @@ function AppContent() {
         </div>
       )}
 
-      {cartOpen && <CartDrawer cart={cart} onClose={closeOverlay} onQty={setQty} onRemove={removeItem} toast={toast} reservation={reservation} />}
+      {cartOpen && (
+        <CartDrawer
+          cart={cart}
+          onClose={closeOverlay}
+          onQty={setQty}
+          onRemove={removeItem}
+          toast={toast}
+          reservation={reservation}
+          onReservationExpired={(expired) => {
+            setReservation((prev) => {
+              const prevList = Array.isArray(prev) ? prev : prev ? [prev] : [];
+              const expiredList = Array.isArray(expired) ? expired : expired ? [expired] : [];
+              const expiredIds = new Set(expiredList.map((r) => r?.id).filter(Boolean));
+              const next = prevList.filter((r) => !expiredIds.has(r?.id));
+              return next.length > 0 ? next : null;
+            });
+          }}
+          clearCart={() => setCart([])}
+        />
+      )}
 
       <Toast list={toast.list} />
 
-      <SupportWidget onOpenLogin={() => openModal('login')} toast={toast} />
+      <SupportWidget
+        onOpenLogin={() => openModal('login')}
+        toast={toast}
+        onOpenReserve={() => { if (!user) { openModal('reserve-error'); } else { openModal('reserve'); } }}
+        onNavigate={navigatePage}
+      />
     </>
   );
 }

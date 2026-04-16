@@ -71,6 +71,32 @@ async function requestJson(path, options = {}) {
   return payload;
 }
 
+async function uploadForm(path, formData) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      body: formData,
+    });
+  } catch {
+    throw new Error(tr(ERR_UNREACHABLE));
+  }
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!res.ok) {
+    const detail = (payload && (payload.detail || payload.message)) || res.statusText || 'Upload failed';
+    throw new Error(detail);
+  }
+
+  return payload;
+}
+
 export const api = {
   auth: {
     getPublicConfig: async () => {
@@ -258,8 +284,11 @@ export const api = {
   },
 
   events: {
-    list: async (userId = null) => {
-      const qp = userId ? `?user_id=${encodeURIComponent(String(userId))}` : '';
+    list: async (userId = null, past = false) => {
+      const params = new URLSearchParams();
+      if (userId) params.set('user_id', String(userId));
+      if (past) params.set('past', '1');
+      const qp = params.toString() ? `?${params.toString()}` : '';
       return requestJson(`/events/${qp}`);
     },
 
@@ -317,7 +346,22 @@ export const api = {
     },
   },
 
+  orders: {
+    create: async (userId, payload) => {
+      const qp = userId ? `?user_id=${encodeURIComponent(String(userId))}` : '';
+      return requestJson(`/orders${qp}`, {
+        method: 'POST',
+        body: payload,
+      });
+    },
+  },
+
   admin: {
+    orders: {
+      list: async (adminId) => {
+        return requestJson(`/admin/orders/?admin_id=${encodeURIComponent(String(adminId || ''))}`);
+      },
+    },
     reservations: {
       list: async (adminId) => {
         return requestJson(`/admin/reservations?admin_id=${encodeURIComponent(String(adminId || ''))}`);
@@ -338,6 +382,39 @@ export const api = {
           body: { is_blocked: Boolean(blocked) },
         });
       },
+
+      setLayout: async (adminId, tableId, x, y) => {
+        return requestJson(`/admin/tables/${tableId}/layout?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'PUT',
+          body: { x: Number(x), y: Number(y) },
+        });
+      },
+
+      setMeta: async (adminId, tableId, payload) => {
+        return requestJson(`/admin/tables/${tableId}/meta?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'PUT',
+          body: payload,
+        });
+      },
+
+      create: async (adminId, payload) => {
+        return requestJson(`/admin/tables?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'POST',
+          body: payload,
+        });
+      },
+
+      remove: async (adminId, tableId) => {
+        return requestJson(`/admin/tables/${tableId}?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'DELETE',
+        });
+      },
+
+      removeAllForRestaurant: async (adminId, restaurantId) => {
+        return requestJson(`/admin/restaurants/${restaurantId}/tables?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+          method: 'DELETE',
+        });
+      },
     },
   },
 
@@ -346,8 +423,73 @@ export const api = {
       return requestJson('/restaurants/');
     },
 
+    adminCreate: async (adminId, payload) => {
+      return requestJson(`/restaurants/?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+        method: 'POST',
+        body: payload,
+      });
+    },
+
+    adminUpdate: async (adminId, restaurantId, payload) => {
+      return requestJson(`/restaurants/${restaurantId}?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+        method: 'PUT',
+        body: payload,
+      });
+    },
+
+    adminDelete: async (adminId, restaurantId) => {
+      return requestJson(`/restaurants/${restaurantId}?admin_id=${encodeURIComponent(String(adminId || ''))}`, {
+        method: 'DELETE',
+      });
+    },
+
     tables: async (restaurantId) => {
       return requestJson(`/restaurants/${restaurantId}/tables`);
+    },
+  },
+
+  uploads: {
+    image: async (adminId, file, prefix = 'admin') => {
+      const formData = new FormData();
+      formData.append('admin_id', String(adminId || ''));
+      formData.append('prefix', prefix);
+      formData.append('file', file);
+      return uploadForm('/uploads/image', formData);
+    },
+  },
+
+  reviews: {
+    list: async (featuredOnly = false) => {
+      const qp = featuredOnly ? '?featured_only=1' : '';
+      return requestJson(`/reviews/${qp}`);
+    },
+
+    create: async (payload, userId = null) => {
+      const qp = userId ? `?user_id=${encodeURIComponent(String(userId))}` : '';
+      return requestJson(`/reviews/${qp}`, {
+        method: 'POST',
+        body: payload,
+      });
+    },
+
+    adminReply: async (adminId, reviewId, reply) => {
+      return requestJson(`/reviews/${reviewId}/reply?admin_id=${encodeURIComponent(String(adminId))}`, {
+        method: 'PUT',
+        body: { admin_reply: reply },
+      });
+    },
+
+    adminFeature: async (adminId, reviewId, isFeatured) => {
+      return requestJson(`/reviews/${reviewId}/feature?admin_id=${encodeURIComponent(String(adminId))}`, {
+        method: 'PUT',
+        body: { is_featured: isFeatured },
+      });
+    },
+
+    adminDelete: async (adminId, reviewId) => {
+      return requestJson(`/reviews/${reviewId}?admin_id=${encodeURIComponent(String(adminId))}`, {
+        method: 'DELETE',
+      });
     },
   },
 };

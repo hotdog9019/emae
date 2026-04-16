@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey
+﻿from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -172,6 +172,24 @@ class Reservation(Base):
         return []
 
 
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    items_json = Column(Text, nullable=False)
+    total = Column(Integer, nullable=False, default=0)
+    fulfillment = Column(String, nullable=True)  # delivery | pickup
+    fulfillment_time = Column(String, nullable=True)  # datetime-local string
+    restaurant_id = Column(Integer, nullable=True, index=True)
+    address = Column(String, nullable=True)
+    payment = Column(String, nullable=True)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+
+    user = relationship("User")
+
+
 class Restaurant(Base):
     __tablename__ = "restaurants"
 
@@ -191,6 +209,8 @@ class Table(Base):
     seats = Column(Integer, nullable=False, default=2)
     x = Column(Integer, nullable=True)
     y = Column(Integer, nullable=True)
+    kind = Column(String, nullable=True)
+    scale = Column(Float, nullable=True)
     is_blocked = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -264,3 +284,19 @@ class Event(Base):
     image_url = Column(String, nullable=True)
     is_private = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    author_name = Column(String, nullable=False, default="Гость")
+    rating = Column(Integer, nullable=False, default=5)
+    text = Column(Text, nullable=False)
+    admin_reply = Column(Text, nullable=True)
+    is_featured = Column(Boolean, nullable=False, default=False)
+    order_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+
+    user = relationship("User")

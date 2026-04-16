@@ -7,7 +7,7 @@ import './support.css';
 
 const SW_POS_KEY = 'support_widget_pos:v1';
 
-export function SupportWidget({ onOpenLogin, toast }) {
+export function SupportWidget({ onOpenLogin, toast, onOpenReserve, onNavigate }) {
   const { user } = useAuth();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -264,6 +264,45 @@ export function SupportWidget({ onOpenLogin, toast }) {
                 ))}
               </div>
 
+              <div className="sw-quick-actions">
+                <div className="sw-quick-label">{t('support_quick_actions')}</div>
+                <div className="sw-quick-btns">
+                  <button
+                    type="button"
+                    className="sw-quick-btn"
+                    onClick={() => {
+                      if (onOpenReserve) { onOpenReserve(); }
+                      else { setDraft(t('support_action_reserve')); }
+                    }}
+                  >
+                    <Icons.Cal /> {t('support_action_reserve')}
+                  </button>
+                  <button
+                    type="button"
+                    className="sw-quick-btn"
+                    onClick={() => {
+                      if (onNavigate) onNavigate('menu');
+                      else setDraft(t('support_action_menu'));
+                    }}
+                  >
+                    <Icons.Menu /> {t('support_action_menu')}
+                  </button>
+                  <button
+                    type="button"
+                    className="sw-quick-btn"
+                    onClick={() => setDraft(t('support_action_question') + ': ')}
+                  >
+                    <Icons.Info /> {t('support_action_question')}
+                  </button>
+                  <button
+                    type="button"
+                    className="sw-quick-btn sw-quick-btn-red"
+                    onClick={() => setDraft(t('support_action_complaint') + ': ')}
+                  >
+                    <Icons.Sparkles /> {t('support_action_complaint')}
+                  </button>
+                </div>
+              </div>
               <div className="sw-foot">
                 <input
                   className="fi sw-inp"

@@ -4,7 +4,7 @@ setlocal
 set CF_EXE_LOCAL=%~dp0cloudflared-2026.2.0.exe
 set CF_EXE_SYSTEM=C:\Program Files (x86)\cloudflared\cloudflared.exe
 set CF_CFG=C:\Users\tema\.cloudflared\config.yml
-set TUNNEL_NAME=emae-app
+set TUNNEL_NAME=vashenazvanie-app
 
 set CF_EXE=
 if exist "%CF_EXE_LOCAL%" set CF_EXE=%CF_EXE_LOCAL%

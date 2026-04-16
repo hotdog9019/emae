@@ -400,3 +400,67 @@
   color: var(--red);
   text-transform: uppercase;
 }
+
+/* Cart quantity badge on menu card image */
+.mc-img { position: relative; }
+.mc-cart-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1a1206;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg);
+  z-index: 2;
+  animation: cartBadgeIn 0.25s var(--ease);
+}
+@keyframes cartBadgeIn {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Qty controls in menu card */
+.mc-qty-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(201,169,110,0.50);
+  border-radius: 999px;
+  padding: 4px 6px;
+  background: rgba(201,169,110,0.08);
+}
+.mc-qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(201,169,110,0.40);
+  background: rgba(201,169,110,0.12);
+  color: var(--gold2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.22s var(--ease);
+  flex-shrink: 0;
+}
+.mc-qty-btn:hover {
+  background: rgba(201,169,110,0.25);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.mc-qty-val {
+  min-width: 20px;
+  text-align: center;
+  font-family: var(--ff-d);
+  font-size: 17px;
+  color: var(--text);
+  font-weight: 400;
+}

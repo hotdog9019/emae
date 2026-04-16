@@ -3,11 +3,12 @@ import { Icons } from '../icons/Icons';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
+import { fmtPhone } from '../../utils/helpers';
 
-export function ReserveModal({ onClose, toast }) {
+export function ReserveModal({ onClose, toast, onReservationCreated }) {
   const { user } = useAuth();
   const { t } = useI18n();
-  const [f, setF] = useState({phone:"",date:"",time:"",guests:2,comment:""});
+  const [f, setF] = useState(() => ({ phone: user?.phone || "", date: "", time: "", guests: 2, comment: "" }));
   const [loading, setLoading] = useState(false);
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRest, setSelectedRest] = useState(null);
@@ -27,8 +28,8 @@ export function ReserveModal({ onClose, toast }) {
   
   const upd = k => e => setF(p => ({...p, [k]: e.target.value}));
   const times = ["12:00","13:00","14:00","15:00","17:00","18:00","19:00","20:00","21:00"];
-  const gapScaleX = 1.14;
-  const gapScaleY = 1.18;
+  const gapScaleX = 1.28;
+  const gapScaleY = 1.38;
 
   const tableNum = (name) => {
     const m = String(name || '').match(/(\d+)/);
@@ -77,6 +78,12 @@ export function ReserveModal({ onClose, toast }) {
       .then((r) => setRestaurants(normalizeList(r)))
       .catch(() => setRestaurants([]));
   }, []);
+
+  useEffect(() => {
+    if (!user?.phone) return;
+    if (f.phone) return;
+    setF((prev) => ({ ...prev, phone: user.phone }));
+  }, [user?.phone, f.phone]);
 
   useEffect(() => {
     // загрузим таблицы выбранного ресторана
@@ -154,6 +161,10 @@ export function ReserveModal({ onClose, toast }) {
       toast.err(t('reserve_required_fields')); 
       return; 
     }
+    if (String(f.phone).replace(/\D/g, '').length < 11) {
+      toast.err(t('auth_phone_required'));
+      return;
+    }
       const ids = Array.from(selectedTables || []);
     if (ids.length === 0) {
       toast.err(t('reserve_pick_table'));
@@ -163,7 +174,7 @@ export function ReserveModal({ onClose, toast }) {
     try {
       await api.reservations.create(
         user.id,
-        "user@restaurant.com",
+        (user.email ? String(user.email) : undefined),
         f.phone,
         f.date,
         f.time,
@@ -175,13 +186,14 @@ export function ReserveModal({ onClose, toast }) {
       );
       const tblWord = ids.length > 1 ? t('reserve_tbl_multi') : t('reserve_tbl_single');
       const verb = ids.length > 1 ? t('reserve_verb_multi') : t('reserve_verb_single');
-      toast.ok(t('reserve_toast_success', { 
-        tableWord: tblWord, 
-        guests: f.guests, 
+      toast.ok(t('reserve_toast_success', {
+        tableWord: tblWord,
+        guests: f.guests,
         guestWord: t('guests_word', { count: f.guests }),
-        verb, 
+        verb,
         status: t('reserve_status_pending'),
-      })); 
+      }));
+      onReservationCreated?.();
       onClose();
     } catch (err) {
       toast.err(err.message || t('reserve_error'));
@@ -191,7 +203,7 @@ export function ReserveModal({ onClose, toast }) {
   };
   return (
     <div className="modal-ov" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal modal-xl reserve-modal">
           <div className="m-hdr">
             <div className="m-ttl"><span className="ico">◫</span>{t('reserve_title')}</div>
           <button type="button" className="m-x" onClick={onClose} aria-label={t('close')}>
@@ -199,13 +211,23 @@ export function ReserveModal({ onClose, toast }) {
           </button>
           </div>
         <div className="m-body">
+          <div className="reserve-layout">
+          <div className="reserve-side">
           <div className="fg">
             <div className="fl">{t('user_label')}</div>
             <input className="fi" type="text" placeholder={user.name} value={user.name} disabled style={{opacity:0.7}}/>
           </div>
           <div className="fg">
             <div className="fl"><Icons.Phone />{t('phone_label')}</div>
-            <input className="fi" type="tel" placeholder="+7..." value={f.phone} onChange={upd("phone")}/>
+            <input
+              className="fi"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+7 (___) ___-__-__"
+              value={f.phone}
+              onChange={(e) => setF((p) => ({ ...p, phone: fmtPhone(e.target.value) }))}
+            />
           </div>
           <div className="date-row">
             <div className="fg">
@@ -221,6 +243,40 @@ export function ReserveModal({ onClose, toast }) {
               </select>
             </div>
           </div>
+          <div className="fg">
+            <div className="fl"><Icons.Users />{t('guests_count_label')}</div>
+            <div className="gs-wrap">
+              <button className="gs-btn" onClick={() => setF(p => ({...p, guests: Math.max(1, p.guests-1)}))}>
+                <Icons.Minus />
+              </button>
+              <span className="gs-val">{f.guests}</span>
+              <button className="gs-btn" onClick={() => setF(p => ({...p, guests: Math.min(20, p.guests+1)}))}>
+                <Icons.Plus />
+              </button>
+              <span className="gs-label">
+                {t('guests_word', { count: f.guests })}
+              </span>
+            </div>
+          </div>
+          <div className="fg">
+            <div className="fl">{t('wishes')}</div>
+            <textarea className="fi" placeholder={t('wishes_ph')} 
+                      value={f.comment} onChange={upd("comment")} rows={4} 
+                      style={{resize:"none",lineHeight:1.6}}/>
+          </div>
+          <button className="submit" onClick={submit} disabled={loading || !f.phone || !f.date || !f.time || selectedTables.size === 0}>
+            {loading ? t('reserving') : (selectedTables.size > 1 ? t('reserve_tables') : t('reserve_table'))}
+          </button>
+          <div style={{marginTop:8,color:'var(--muted)',fontSize:13}}>
+            {selectedTables.size === 0 && <div>{t('hint_pick_table')}</div>}
+            {selectedTables.size > 0 && isPro && <div>{t('hint_selected_tables', { count: selectedTables.size })}</div>}
+            {!f.phone && <div>{t('hint_need_phone')}</div>}
+            {!f.date && <div>{t('hint_need_date')}</div>}
+            {!f.time && <div>{t('hint_need_time')}</div>}
+          </div>
+          </div>
+
+          <div className="reserve-plan">
             <div style={{marginTop:12}}>
               <div className="fg">
                 <div className="fl">{t('restaurant_label')}</div>
@@ -241,7 +297,7 @@ export function ReserveModal({ onClose, toast }) {
               <div style={{marginTop:12}}>
                 <div className="fl" style={{marginBottom:8}}>{t('table_plan')}</div>
                 <div style={{background:"linear-gradient(180deg,#0f0f10, #111111)",borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8}}>
-                  <div style={{width:'100%',maxWidth:440,background:"linear-gradient(180deg,#141414,#0a0a0a)",borderRadius:8,position:"relative",overflow:"hidden",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.02)"}}>
+                  <div className="reserve-plan-canvas" style={{width:'100%',background:"linear-gradient(180deg,#141414,#0a0a0a)",borderRadius:8,position:"relative",overflow:"hidden",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.02)"}}>
                     {tables.length === 0 && <div style={{padding:20,color:"var(--muted)"}}>{t('no_tables')}</div>}
                     {tables.length > 0 && (
                       <div style={{position:'relative',width:'100%',paddingBottom:'66.6667%'}}>
@@ -302,11 +358,11 @@ export function ReserveModal({ onClose, toast }) {
                             };
                           };
 
-                          const fallbackCols = 6;
-                          const fallbackStartX = 64;
-                          const fallbackStartY = 78;
-                          const fallbackStepX = 70;
-                          const fallbackStepY = 62;
+                          const fallbackCols = 4;
+                          const fallbackStartX = 72;
+                          const fallbackStartY = 68;
+                          const fallbackStepX = 92;
+                          const fallbackStepY = 72;
 
                           const placements = tables.map((tbl, i) => {
                             const c0 = coordsFor(tbl);
@@ -320,21 +376,62 @@ export function ReserveModal({ onClose, toast }) {
                             return { tbl, x: c2.x, y: c2.y, i };
                           });
 
-                          return placements.map(({ tbl, x, y, i }) => {
+                          // Collision resolution: push overlapping tables apart
+                          for (let pass = 0; pass < 10; pass++) {
+                            let moved = false;
+                            for (let ii = 0; ii < placements.length; ii++) {
+                              const a = placements[ii];
+                              const barA = isBarSeat(a.tbl);
+                              const scA = Math.max(0.7, Math.min(1.6, Number(a.tbl?.scale) || 1));
+                              const stA = Math.max(1, Number(a.tbl?.seats || 2));
+                              const hwA = (barA ? 13 : stA >= 4 ? 37 : 33) * scA;
+                              const hhA = (barA ? 13 : stA >= 4 ? 23 : 20) * scA;
+                              for (let jj = ii + 1; jj < placements.length; jj++) {
+                                const b = placements[jj];
+                                const barB = isBarSeat(b.tbl);
+                                const scB = Math.max(0.7, Math.min(1.6, Number(b.tbl?.scale) || 1));
+                                const stB = Math.max(1, Number(b.tbl?.seats || 2));
+                                const hwB = (barB ? 13 : stB >= 4 ? 37 : 33) * scB;
+                                const hhB = (barB ? 13 : stB >= 4 ? 23 : 20) * scB;
+                                const reqX = hwA + hwB + 12;
+                                const reqY = hhA + hhB + 18;
+                                const dx = b.x - a.x, dy = b.y - a.y;
+                                const ovX = reqX - Math.abs(dx), ovY = reqY - Math.abs(dy);
+                                if (ovX > 0 && ovY > 0) {
+                                  moved = true;
+                                  if (ovX <= ovY) {
+                                    const push = ovX / 2 + 2;
+                                    const dir = dx >= 0 ? 1 : -1;
+                                    a.x -= dir * push; b.x += dir * push;
+                                  } else {
+                                    const push = ovY / 2 + 2;
+                                    const dir = dy >= 0 ? 1 : -1;
+                                    a.y -= dir * push; b.y += dir * push;
+                                  }
+                                }
+                              }
+                            }
+                            if (!moved) break;
+                          }
+
+                          return placements.map((p) => {
+                          const { tbl, x, y, i } = p;
                             if (!tbl) return null;
                             const n = tableNum(tbl?.name) ?? (Number.isFinite(Number(tbl?.id)) ? Number(tbl.id) : (i + 1));
-                            const bar = isBarSeat(tbl);
+                            const kind = String(tbl?.kind || '').trim().toLowerCase() || null;
+                            const bar = kind === 'bar' || isBarSeat(tbl);
                             const seats = Math.max(1, Number(tbl?.seats || 2));
                             const isBlocked = Boolean(tbl?.is_blocked);
                             const isOcc = isTableOcc(tbl);
                             const isSelected = selectedTables.has(tbl.id);
                             const canPick = !isBlocked && !isOcc;
 
-                            const isRound = variant === 1 && !bar;
-                            const isBooth = variant === 2 && !bar;
+                            const isRound = kind === 'round' || (!kind && variant === 1 && !bar);
+                            const isBooth = kind === 'booth' || (!kind && variant === 2 && !bar);
+                            const scale = Math.max(0.7, Math.min(1.6, Number(tbl?.scale) || 1));
 
-                            const w = bar ? 26 : seats >= 4 ? 74 : 66;
-                            const h = bar ? 26 : seats >= 4 ? 46 : 40;
+                            const w = (bar ? 26 : seats >= 4 ? 74 : 66) * scale;
+                            const h = (bar ? 26 : seats >= 4 ? 46 : 40) * scale;
                             const r = isRound ? Math.min(w, h) / 2 : 10;
 
                             const mX = w / 2 + 18;
@@ -342,7 +439,7 @@ export function ReserveModal({ onClose, toast }) {
                             const cx = clamp(x, floor.x + mX, floor.x + floor.w - mX);
                             const cy = clamp(y, floor.y + mY, floor.y + floor.h - mY);
 
-                            const chairs = chairPoints(seats, w, h, bar).map((p) => ({ ...p, r: bar ? 3.7 : 4.0 }));
+                            const chairs = chairPoints(seats, w, h, bar).map((p) => ({ ...p, r: (bar ? 3.7 : 4.0) * scale }));
                             const labelColor = isBlocked ? 'rgba(242,237,230,0.45)' : isOcc ? '#fff' : (isSelected ? '#0b0b0b' : '#f2ede6');
                             const outline = isSelected ? 'rgba(232,202,144,0.95)' : 'rgba(255,255,255,0.12)';
                             const fillTop = isRound ? 'url(#rsv-marble)' : isBooth ? 'url(#rsv-leather)' : 'url(#rsv-wood)';
@@ -476,39 +573,10 @@ export function ReserveModal({ onClose, toast }) {
                 </div>
               </div>
             </div>
-          <div className="fg">
-            <div className="fl"><Icons.Users />{t('guests_count_label')}</div>
-            <div className="gs-wrap">
-              <button className="gs-btn" onClick={() => setF(p => ({...p, guests: Math.max(1, p.guests-1)}))}>
-                <Icons.Minus />
-              </button>
-              <span className="gs-val">{f.guests}</span>
-              <button className="gs-btn" onClick={() => setF(p => ({...p, guests: Math.min(20, p.guests+1)}))}>
-                <Icons.Plus />
-              </button>
-              <span className="gs-label">
-                {t('guests_word', { count: f.guests })}
-              </span>
-            </div>
-          </div>
-          <div className="fg">
-            <div className="fl">{t('wishes')}</div>
-            <textarea className="fi" placeholder={t('wishes_ph')} 
-                      value={f.comment} onChange={upd("comment")} rows={3} 
-                      style={{resize:"none",lineHeight:1.6}}/>
-          </div>
-          <button className="submit" onClick={submit} disabled={loading || !f.phone || !f.date || !f.time || selectedTables.size === 0}>
-            {loading ? t('reserving') : (selectedTables.size > 1 ? t('reserve_tables') : t('reserve_table'))}
-          </button>
-          <div style={{marginTop:8,color:'var(--muted)',fontSize:13}}>
-            {selectedTables.size === 0 && <div>{t('hint_pick_table')}</div>}
-            {selectedTables.size > 0 && isPro && <div>{t('hint_selected_tables', { count: selectedTables.size })}</div>}
-            {!f.phone && <div>{t('hint_need_phone')}</div>}
-            {!f.date && <div>{t('hint_need_date')}</div>}
-            {!f.time && <div>{t('hint_need_time')}</div>}
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

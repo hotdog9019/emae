@@ -1,9 +1,69 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SLIDES } from '../../data/constants';
-import { MENU } from '../../data/constants';
+import { SLIDES, MENU } from '../../data/constants';
 import { Icons } from '../icons/Icons';
 import { useInView } from '../../hooks/useInView';
 import { useI18n } from '../../hooks/useI18n';
+import { useAuth } from '../../hooks/useAuth';
+import { makeStorageKey, readJsonStorageWithLegacy } from '../../utils/brand';
+
+const HERO_CONFIG_SUFFIX = 'hero_config';
+const HERO_CONFIG_KEY = makeStorageKey(HERO_CONFIG_SUFFIX);
+
+function buildSlidesFromConfig(config) {
+  if (!Array.isArray(config) || config.length === 0) return SLIDES;
+  return config.map((slot, idx) => {
+    const base = SLIDES[idx] || SLIDES[0];
+    const isCustom = slot.mode === 'custom';
+
+    if (isCustom) {
+      return {
+        ...base,
+        dishId: null,
+        dishKey: null,
+        dishNameOverride: slot.titleOverride || slot.customTitle || base.dishNameOverride || '',
+        titleAKey: null,
+        titleBKey: null,
+        tagKey: null,
+        tagOverride: slot.tag !== undefined && slot.tag !== '' ? slot.tag : (base.tagKey ? null : ''),
+        tagKeyFallback: base.tagKey,
+        descKey: null,
+        descOverride: slot.desc || '',
+        img: slot.customImg || base.img,
+        price: base.price,
+        weight: base.weight,
+      };
+    }
+
+    const dish = MENU.find(d => Number(d.id) === Number(slot.dishId));
+    if (!dish) return { ...base, descOverride: slot.desc || '' };
+    return {
+      ...base,
+      dishId: dish.id,
+      dishKey: null,
+      dishNameOverride: slot.titleOverride || dish.name,
+      titleAKey: null,
+      titleBKey: null,
+      tagKey: null,
+      tagOverride: slot.tag !== undefined && slot.tag !== '' ? slot.tag : (base.tagKey ? null : ''),
+      tagKeyFallback: base.tagKey,
+      descKey: null,
+      descOverride: slot.desc || '',
+      price: String(dish.price),
+      weight: dish.weight || base.weight,
+      img: dish.img || base.img,
+    };
+  });
+}
+
+function getActiveSlides() {
+  try {
+    const config = readJsonStorageWithLegacy(HERO_CONFIG_SUFFIX, null, Array.isArray);
+    if (!Array.isArray(config)) return SLIDES;
+    return buildSlidesFromConfig(config);
+  } catch {
+    return SLIDES;
+  }
+}
 
 function FadeSlideImage({ src, alt, priority = false, freeze = false }) {
   const [baseSrc, setBaseSrc] = useState(src || null);
@@ -91,21 +151,34 @@ function FadeSlideImage({ src, alt, priority = false, freeze = false }) {
   );
 }
 
-export function HeroPage({ onAddToCart, toast, setPage, setModal }) {
+export function HeroPage({ onAddToCart, toast, setPage, setModal, onOpenAdminEdit }) {
   const { theme, t } = useI18n();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role_name === 'admin' || user?.is_admin;
   const [cur, setCur] = useState(0);
+  const [slides, setSlides] = useState(getActiveSlides);
   const introRef = useRef(null);
   const cardsRef = useRef(null);
   const INTERVAL = 6500;
   const timerRadius = 11;
   const timerCirc = 2 * Math.PI * timerRadius;
   const preloadedRef = useRef(new Set());
-  const themeRef = useRef(theme);
-  const preloadThemeTimerRef = useRef(null);
+
+  // Reload slides when config changes (e.g. after admin saves)
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === HERO_CONFIG_KEY) {
+        setSlides(getActiveSlides());
+        preloadedRef.current = new Set();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const introIn = useInView(introRef);
   const cardsIn = useInView(cardsRef);
-  const len = SLIDES.length;
+  const len = slides.length;
   const prev = (cur - 1 + len) % len;
   const next = (cur + 1) % len;
 
@@ -114,59 +187,19 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal }) {
     return () => window.clearTimeout(id);
   }, [cur, len, INTERVAL]);
 
+  // Preload adjacent slides
   useEffect(() => {
-    const sl = SLIDES[cur];
-    if (!sl) return;
-
-    const lightSrc = sl.imgLight || sl.img;
-    const darkSrc = sl.img;
-    const opposite = theme === 'light' ? darkSrc : lightSrc;
-    if (!opposite) return;
-
-    if (preloadedRef.current.has(opposite)) return;
-    preloadedRef.current.add(opposite);
-
-    const run = () => {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = opposite;
-    };
-
-    if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(run, { timeout: 600 });
-    else window.setTimeout(run, 0);
-  }, [cur, theme]);
-
-  useEffect(() => {
-    const prevTheme = themeRef.current;
-    const themeChanged = prevTheme !== theme;
-    if (themeChanged) themeRef.current = theme;
-
-    const hasPending = preloadThemeTimerRef.current != null;
-    if (!themeChanged && !hasPending) return;
-
-    const urls = [];
-    const slNext = SLIDES[next];
-    const slPrev = SLIDES[prev];
-    const pick = sl => theme === 'light' ? (sl.imgLight || sl.img) : sl.img;
-    if (slNext) urls.push(pick(slNext));
-    if (slPrev) urls.push(pick(slPrev));
-
-    const run = () => {
-      urls.forEach((url) => {
-        if (!url) return;
-        if (preloadedRef.current.has(url)) return;
-        preloadedRef.current.add(url);
-        const img = new Image();
-        img.decoding = 'async';
-        img.src = url;
-      });
-      preloadThemeTimerRef.current = null;
-    };
-
-    window.clearTimeout(preloadThemeTimerRef.current);
-    preloadThemeTimerRef.current = window.setTimeout(run, 420);
-    return () => window.clearTimeout(preloadThemeTimerRef.current);
-  }, [theme, next, prev]);
+    const slNext = slides[next];
+    const slPrev = slides[prev];
+    [slNext, slPrev].forEach(sl => {
+      if (!sl?.img) return;
+      if (preloadedRef.current.has(sl.img)) return;
+      preloadedRef.current.add(sl.img);
+      const run = () => { const img = new Image(); img.decoding = 'async'; img.src = sl.img; };
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(run, { timeout: 600 });
+      else window.setTimeout(run, 0);
+    });
+  }, [next, prev, slides]);
 
   const go = i => setCur((i + len) % len);
 
@@ -186,26 +219,32 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal }) {
             />
           </svg>
         </div>
-        <div className="slide-counter"><strong>0{cur+1}</strong> / 0{SLIDES.length}</div>
+        <div className="slide-counter"><strong>{String(cur+1).padStart(2,'0')}</strong> / {String(slides.length).padStart(2,'0')}</div>
         <div className="slides-wrap" style={{transform:`translateX(-${cur*100}%)`}}>
-          {SLIDES.map((sl, i) => (
+          {slides.map((sl, i) => {
+            const dishName = sl.dishNameOverride || (sl.dishKey ? t(sl.dishKey) : '');
+            const tagLabel = sl.tagOverride !== undefined ? sl.tagOverride : (sl.tagKeyFallback ? t(sl.tagKeyFallback) : (sl.tagKey ? t(sl.tagKey) : ''));
+            const titleA = sl.titleAKey ? t(sl.titleAKey) : dishName.split(' ').slice(0,2).join(' ');
+            const titleB = sl.titleBKey ? t(sl.titleBKey) : dishName.split(' ').slice(2).join(' ');
+            const desc = sl.descOverride !== undefined ? sl.descOverride : (sl.descKey ? t(sl.descKey) : '');
+            return (
             <div key={i} className={`slide${i===cur?" cur":""}`}>
               <FadeSlideImage
-                src={(i === cur || i === prev || i === next) ? (theme === 'light' ? (sl.imgLight || sl.img) : sl.img) : null}
-                alt={t(sl.dishKey)}
+                src={(i === cur || i === prev || i === next) ? sl.img : null}
+                alt={dishName}
                 priority={i === cur}
                 freeze={i !== cur}
               />
               <div className="slide-fog slide-fog-dark" />
               <div className="slide-fog slide-fog-light" />
               <div className="slide-body">
-                <div className="slide-tag">{t(sl.tagKey)}</div>
-                <h1 className="slide-h">{t(sl.titleAKey)}<br/><em>{t(sl.titleBKey)}</em></h1>
-                <p className="slide-p">{t(sl.descKey)}</p>
+                <div className="slide-tag">{tagLabel}</div>
+                <h1 className="slide-h">{titleA}{titleB ? <><br/><em>{titleB}</em></> : null}</h1>
+                {desc && <p className="slide-p">{desc}</p>}
                 <div className="slide-cta">
-                  <button type="button" className="btn btn-gold btn-hero" onClick={() => { 
-                    const d = MENU.find(x => x.id===sl.dishId); 
-                    if(d){onAddToCart(d);toast.ok(t('toast_added_to_cart', { name: t(sl.dishKey) }));} 
+                  <button type="button" className="btn btn-gold btn-hero" onClick={() => {
+                    const d = MENU.find(x => x.id===sl.dishId);
+                    if(d){onAddToCart(d);toast.ok(t('toast_added_to_cart', { name: dishName }));}
                   }}>
                     <Icons.Plus /> {t('hero_order_now')}
                   </button>
@@ -213,23 +252,34 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal }) {
                 </div>
               </div>
               <div className="price-card">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="pc-admin-edit"
+                    title={t('admin_hero_tab')}
+                    onClick={() => setModal && setModal('admin')}
+                  >
+                    <Icons.Image />
+                  </button>
+                )}
                 <div className="pc-label">{t('hero_dish_of_day')}</div>
-                <div className="pc-name">{t(sl.dishKey)}</div>
+                <div className="pc-name">{dishName}</div>
                 <div className="pc-price"><sup>₽</sup>{sl.price}</div>
                 <div className="pc-desc">{sl.weight}</div>
-                <button type="button" className="pc-btn" onClick={() => { 
-                  const d = MENU.find(x => x.id===sl.dishId); 
-                  if(d){onAddToCart(d);toast.ok(t('toast_added_to_cart', { name: t(sl.dishKey) }));} 
+                <button type="button" className="pc-btn" onClick={() => {
+                  const d = MENU.find(x => x.id===sl.dishId);
+                  if(d){onAddToCart(d);toast.ok(t('toast_added_to_cart', { name: dishName }));}
                 }}>
                   + {t('to_cart')}
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <div className="slider-ctrl">
           <div className="dots-row">
-            {SLIDES.map((_, i) => <button key={i} type="button" className={`dot-el${i===cur?" on":""}`} onClick={() => go(i)} aria-label={t('hero_slide_aria', { index: i + 1 })}/>)}
+            {slides.map((_, i) => <button key={i} type="button" className={`dot-el${i===cur?" on":""}`} onClick={() => go(i)} aria-label={t('hero_slide_aria', { index: i + 1 })}/>)}
           </div>
           <div className="arr-row">
             <button type="button" className="arr-btn" onClick={() => go(cur-1)} aria-label={t('hero_prev_slide')}><Icons.ChL /></button>

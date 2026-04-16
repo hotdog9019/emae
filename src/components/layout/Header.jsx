@@ -14,20 +14,35 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
   const langRef = useRef(null);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setShowProfile(false);
-      }
-      if (mobileNavRef.current && !mobileNavRef.current.contains(e.target)) {
-        setShowMobileNav(false);
-      }
-      if (langRef.current && !langRef.current.contains(e.target)) {
-        setShowLang(false);
-      }
+    const handleDocClick = (e) => {
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : null;
+      const isInside = (ref) => {
+        const el = ref.current;
+        if (!el) return false;
+        const target = e.target;
+        if (path && path.includes(el)) return true;
+        return target instanceof Node && el.contains(target);
+      };
+
+      if (!isInside(profileRef)) setShowProfile(false);
+      if (!isInside(mobileNavRef)) setShowMobileNav(false);
+      if (!isInside(langRef)) setShowLang(false);
     };
+
+    const handleEsc = (e) => {
+      if (e.key !== 'Escape') return;
+      setShowProfile(false);
+      setShowMobileNav(false);
+      setShowLang(false);
+    };
+
     if (showProfile || showMobileNav || showLang) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('click', handleDocClick, { capture: true });
+      document.addEventListener('keydown', handleEsc);
+      return () => {
+        document.removeEventListener('click', handleDocClick, { capture: true });
+        document.removeEventListener('keydown', handleEsc);
+      };
     }
   }, [showLang, showMobileNav, showProfile]);
 
@@ -43,6 +58,8 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
     { key: 'home', label: t('nav_home'), icon: Icons.Home, onClick: () => setPage('home'), active: page === 'home' },
     { key: 'menu', label: t('nav_menu'), icon: Icons.Menu, onClick: () => setPage('menu'), active: page === 'menu' },
     { key: 'about', label: t('nav_about'), icon: Icons.Info, onClick: () => setPage('about'), active: page === 'about' },
+    { key: 'events', label: t('events_tab_upcoming') || 'События', icon: Icons.Cal, onClick: () => setPage('events'), active: page === 'events' || page === 'past-events' },
+    { key: 'reviews', label: t('nav_reviews'), icon: Icons.Star, onClick: () => setPage('reviews'), active: page === 'reviews' },
     { key: 'reserve', label: t('nav_reserve'), icon: Icons.Cal, onClick: openReserve, active: false },
     { key: 'contacts', label: t('nav_contacts'), icon: Icons.Map, onClick: () => setPage('contacts'), active: page === 'contacts' },
   ];
@@ -61,7 +78,7 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
         aria-label={t('aria_home')}
         title={t('nav_home')}
       >
-        <div className="brand-name">Emae</div>
+        <div className="brand-name">ВАШЕ НАЗВАНИЕ</div>
         <div className="brand-sub">{t('brand_sub')}</div>
       </button>
       <nav className="nav" aria-label={t('aria_nav')}>
@@ -186,7 +203,13 @@ export function Header({ scrolled, page, setPage, setModal, setCartOpen, cartCou
           {cartCount > 0 && <span className="bdg">{cartCount}</span>}
         </button>
 
-        <div className="user-menu" ref={profileRef}>
+        <div
+          className="user-menu"
+          ref={profileRef}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onTouchStartCapture={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
             className="ico-btn"

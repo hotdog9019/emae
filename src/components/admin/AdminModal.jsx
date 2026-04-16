@@ -1,18 +1,44 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../utils/api';
-import { loadDishStatsState, resetDishStatsState, saveDishStatsState, upsertAndAdvanceDishStatsState } from '../../utils/fakeDishStats';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
 import { Icons } from '../icons/Icons';
+import { SLIDES, MENU } from '../../data/constants';
+import { makeStorageKey, readJsonStorageWithLegacy } from '../../utils/brand';
 import './admin.css';
 
-function fmtDuration(ms) {
-  const total = Math.max(0, Math.round(Number(ms || 0) / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  if (h <= 0) return `${m}m`;
-  if (m <= 0) return `${h}h`;
-  return `${h}h ${m}m`;
+const HERO_CONFIG_SUFFIX = 'hero_config';
+const HERO_CONFIG_KEY = makeStorageKey(HERO_CONFIG_SUFFIX);
+const DEFAULT_HERO_CONFIG = SLIDES.map(sl => ({ dishId: sl.dishId, tag: '', desc: '', price: sl.price, weight: sl.weight, mode: 'dish', titleOverride: '', customTitle: '', customImg: '' }));
+
+const ADMIN_LAYOUT_SCALE = 2;
+const ADMIN_LAYOUT_W = 480 * ADMIN_LAYOUT_SCALE;
+const ADMIN_LAYOUT_H = 320 * ADMIN_LAYOUT_SCALE;
+const ADMIN_LAYOUT_MIN_ZOOM = 0.75;
+const ADMIN_LAYOUT_MAX_ZOOM = 2.5;
+
+async function downloadImageBlob(url, filename) {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('fetch failed');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadHeroConfig() {
+  const parsed = readJsonStorageWithLegacy(HERO_CONFIG_SUFFIX, DEFAULT_HERO_CONFIG, Array.isArray);
+  return Array.isArray(parsed) ? parsed : DEFAULT_HERO_CONFIG;
 }
 
 function clampPercent(raw) {
@@ -91,6 +117,8 @@ export function AdminModal({ onClose, toast }) {
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuItems, setMenuItems] = useState([]);
   const [menuEditingId, setMenuEditingId] = useState(null);
+  const [menuUploading, setMenuUploading] = useState(false);
+  const menuUploadInputRef = useRef(null);
   const [menuForm, setMenuForm] = useState({
     cat: '',
     name: '',
@@ -109,8 +137,8 @@ export function AdminModal({ onClose, toast }) {
   const [discountDraft, setDiscountDraft] = useState({});
   const [discountUpdatingId, setDiscountUpdatingId] = useState(null);
 
-  const [dishStats, setDishStats] = useState(() => loadDishStatsState());
-  const [statsNow, setStatsNow] = useState(() => Date.now());
+  const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
+  const [adminOrders, setAdminOrders] = useState([]);
   const [statsQuery, setStatsQuery] = useState('');
   const [statsSort, setStatsSort] = useState('orders24h_desc');
 
@@ -127,20 +155,88 @@ export function AdminModal({ onClose, toast }) {
 
   const [adminRestaurantsLoading, setAdminRestaurantsLoading] = useState(false);
   const [adminRestaurants, setAdminRestaurants] = useState([]);
+  const [restaurantEditingId, setRestaurantEditingId] = useState(null);
+  const [restaurantBusy, setRestaurantBusy] = useState(false);
+  const [restaurantForm, setRestaurantForm] = useState({
+    name: '',
+    address: '',
+    phone: '',
+  });
 
   const [adminReservationsLoading, setAdminReservationsLoading] = useState(false);
   const [adminReservations, setAdminReservations] = useState([]);
   const [adminReservationUpdatingId, setAdminReservationUpdatingId] = useState(null);
+  const [adminHidePastReservations, setAdminHidePastReservations] = useState(true);
 
   const [adminTablesLoading, setAdminTablesLoading] = useState(false);
   const [adminTablesRestaurantId, setAdminTablesRestaurantId] = useState(null);
   const [adminTables, setAdminTables] = useState([]);
   const [adminTableUpdatingId, setAdminTableUpdatingId] = useState(null);
+  const adminLayoutSvgRef = useRef(null);
+  const adminLayoutDragRef = useRef(null);
+  const adminLayoutPanDragRef = useRef(null);
+  const adminLayoutDecorDragRef = useRef(null);
+  const [adminLayoutDraggingId, setAdminLayoutDraggingId] = useState(null);
+  const [adminLayoutSelectedId, setAdminLayoutSelectedId] = useState(null);
+  const [adminLayoutContextMenu, setAdminLayoutContextMenu] = useState(null);
+  const adminLayoutContextMenuRef = useRef(null);
+  const [adminLayoutDecor, setAdminLayoutDecor] = useState([]);
+  const [adminLayoutTool, setAdminLayoutTool] = useState('pan');
+  const [adminLayoutDraftText, setAdminLayoutDraftText] = useState('Вход');
+  const [adminLayoutSelectedDecorId, setAdminLayoutSelectedDecorId] = useState(null);
+  const [adminLayoutZoom, setAdminLayoutZoom] = useState(1);
+  const [adminLayoutPan, setAdminLayoutPan] = useState({ x: 0, y: 0 });
+  const [tableEditor, setTableEditor] = useState(null);
+  const [tableEditorBusy, setTableEditorBusy] = useState(false);
+
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewReplyId, setReviewReplyId] = useState(null);
+  const [reviewReplyDraft, setReviewReplyDraft] = useState('');
+  const [reviewUpdatingId, setReviewUpdatingId] = useState(null);
+  const [adminHideOldReviews, setAdminHideOldReviews] = useState(true);
+
+  // Hero slideshow config
+  const [heroConfig, setHeroConfig] = useState(loadHeroConfig);
+  const [heroSaved, setHeroSaved] = useState(false);
+  // Menu items loaded from API for hero picker
+  const [heroMenuItems, setHeroMenuItems] = useState(MENU);
 
   const adminId = user?.id;
 
   const selectedThread = useMemo(() => threads.find((thr) => thr.id === selectedId) || null, [selectedId, threads]);
   const restaurantById = useMemo(() => new Map(adminRestaurants.map((r) => [r.id, r])), [adminRestaurants]);
+  const adminLayoutDecorKey = useMemo(
+    () => makeStorageKey(`admin_layout_decor_${adminTablesRestaurantId || 'none'}`),
+    [adminTablesRestaurantId]
+  );
+
+  const adminReservationsFiltered = useMemo(() => {
+    if (!adminHidePastReservations) return adminReservations;
+    const now = new Date();
+    return adminReservations.filter((r) => {
+      if (!r) return false;
+      if (r.is_cancelled) return false;
+      try {
+        const dt = new Date(`${r.date}T${r.time || '00:00'}`);
+        return dt >= now;
+      } catch {
+        return true;
+      }
+    });
+  }, [adminHidePastReservations, adminReservations]);
+
+  const reviewsFiltered = useMemo(() => {
+    if (!adminHideOldReviews) return reviews;
+    const threshold = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return reviews.filter((r) => {
+      const raw = r?.created_at;
+      if (!raw) return true;
+      const ts = new Date(raw).getTime();
+      if (!Number.isFinite(ts)) return true;
+      return ts >= threshold;
+    });
+  }, [adminHideOldReviews, reviews]);
 
   const stopList = useMemo(() => {
     const q = String(stopQuery || '').trim().toLowerCase();
@@ -154,21 +250,73 @@ export function AdminModal({ onClose, toast }) {
   const stopActive = useMemo(() => stopList.filter((it) => Boolean(it?.is_active)), [stopList]);
   const stopInactive = useMemo(() => stopList.filter((it) => !it?.is_active), [stopList]);
 
-  const statsRows = useMemo(() => {
-    const sum = (arr) => (Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x) || 0), 0) : 0);
-    const safe48 = (raw) => {
-      const arr = Array.isArray(raw) ? raw.map((x) => Math.max(0, Math.floor(Number(x) || 0))) : [];
-      const out = arr.slice(-48);
-      while (out.length < 48) out.unshift(0);
-      return out;
+  const statsByDish = useMemo(() => {
+    const HOUR = 60 * 60 * 1000;
+    const now = Date.now();
+    const curHourStart = Math.floor(now / HOUR) * HOUR;
+    const start48 = curHourStart - 47 * HOUR;
+    const byId = new Map();
+
+    const ensure = (id) => {
+      const key = String(id);
+      let e = byId.get(key);
+      if (!e) {
+        e = {
+          series48: Array.from({ length: 48 }, () => 0),
+          revenue48: Array.from({ length: 48 }, () => 0),
+          totalQty: 0,
+          totalRevenue: 0,
+          firstSeenAt: 0,
+        };
+        byId.set(key, e);
+      }
+      return e;
     };
 
-    const now = Number(statsNow || Date.now());
+    const parseTs = (raw) => {
+      if (!raw) return null;
+      const ts = new Date(raw).getTime();
+      return Number.isFinite(ts) ? ts : null;
+    };
+
+    for (const o of Array.isArray(adminOrders) ? adminOrders : []) {
+      if (adminTablesRestaurantId && Number(o?.restaurant_id || 0) && Number(o.restaurant_id) !== Number(adminTablesRestaurantId)) {
+        continue;
+      }
+      const ts = parseTs(o?.created_at) ?? parseTs(o?.createdAt) ?? parseTs(o?.fulfillment_time);
+      if (!ts) continue;
+      const hourStart = Math.floor(ts / HOUR) * HOUR;
+      const hourIdx = Math.floor((hourStart - start48) / HOUR);
+      const items = Array.isArray(o?.items) ? o.items : [];
+      for (const it of items) {
+        const id = it?.id;
+        if (id == null) continue;
+        const qty = Math.max(0, Math.floor(Number(it?.qty ?? it?.quantity ?? 0) || 0));
+        if (!qty) continue;
+        const price = Number(it?.price);
+        const unit = Number.isFinite(price) ? Math.max(0, price) : 0;
+        const e = ensure(id);
+        e.totalQty += qty;
+        e.totalRevenue += unit * qty;
+        if (!e.firstSeenAt || ts < e.firstSeenAt) e.firstSeenAt = ts;
+        if (hourIdx >= 0 && hourIdx < 48) {
+          e.series48[hourIdx] += qty;
+          e.revenue48[hourIdx] += unit * qty;
+        }
+      }
+    }
+
+    return byId;
+  }, [adminOrders, adminTablesRestaurantId]);
+
+  const statsRows = useMemo(() => {
+    const sum = (arr) => (Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x) || 0), 0) : 0);
 
     const rows = menuItems.map((it) => {
       const id = it?.id != null ? String(it.id) : '';
-      const entry = id ? dishStats?.dishes?.[id] : null;
-      const series48 = safe48(entry?.last48h);
+      const entry = id ? statsByDish.get(id) : null;
+      const series48 = Array.isArray(entry?.series48) ? entry.series48.slice(0, 48) : Array.from({ length: 48 }, () => 0);
+      const revenue48 = Array.isArray(entry?.revenue48) ? entry.revenue48.slice(0, 48) : Array.from({ length: 48 }, () => 0);
       const prev24 = sum(series48.slice(0, 24));
       const last24 = sum(series48.slice(24));
       const last1 = series48[47] || 0;
@@ -176,16 +324,17 @@ export function AdminModal({ onClose, toast }) {
       const trend = delta24h > 0 ? 'up' : delta24h < 0 ? 'down' : 'flat';
 
       const firstSeenAt = Number(entry?.firstSeenAt || 0);
-      const startsInMs = firstSeenAt ? Math.max(0, firstSeenAt + 60 * 60 * 1000 - now) : 0;
-      const ageH = firstSeenAt ? Math.max(0, (now - firstSeenAt) / (60 * 60 * 1000)) : 0;
+      const ageH = firstSeenAt ? Math.max(0, (Date.now() - firstSeenAt) / (60 * 60 * 1000)) : 0;
 
       const curDisc = clampPercent(it.discount_percent || 0);
       const basePrice = Number(it.price || 0);
       const priceNow = finalPrice(basePrice, curDisc);
 
-      const totalOrders = Math.max(0, Math.floor(Number(entry?.totalOrders ?? (prev24 + last24))));
-      const revenue24h = priceNow * last24;
-      const revenuePrev24h = priceNow * prev24;
+      const totalOrders = Math.max(0, Math.floor(Number(entry?.totalQty ?? (prev24 + last24))));
+      const revenue24hRaw = sum(revenue48.slice(24));
+      const revenuePrev24hRaw = sum(revenue48.slice(0, 24));
+      const revenue24h = revenue24hRaw > 0 ? revenue24hRaw : (priceNow * last24);
+      const revenuePrev24h = revenuePrev24hRaw > 0 ? revenuePrev24hRaw : (priceNow * prev24);
 
       return {
         it,
@@ -198,7 +347,7 @@ export function AdminModal({ onClose, toast }) {
         delta24h,
         trend,
         ageH,
-        startsInMs,
+        firstSeenAt,
         priceNow,
         revenue24h,
         revenuePrev24h,
@@ -218,7 +367,7 @@ export function AdminModal({ onClose, toast }) {
       const demandTier = demand >= 0.72 ? 'high' : demand >= 0.42 ? 'mid' : 'low';
       return { ...r, demand, demandTier, suggestedDiscount: suggested };
     });
-  }, [dishStats, menuItems, statsNow]);
+  }, [menuItems, statsByDish]);
 
   const statsFilteredSorted = useMemo(() => {
     const q = String(statsQuery || '').trim().toLowerCase();
@@ -252,8 +401,8 @@ export function AdminModal({ onClose, toast }) {
       .sort((a, b) => b.orders - a.orders);
 
     const newDishes = statsRows
-      .filter((r) => (Number(r.startsInMs || 0) > 0) || (Number(r.ageH || 0) < 2))
-      .sort((a, b) => (a.startsInMs || 0) - (b.startsInMs || 0));
+      .filter((r) => (Number(r.totalOrders || 0) > 0) && (Number(r.ageH || 0) < 24))
+      .sort((a, b) => (a.firstSeenAt || 0) - (b.firstSeenAt || 0));
 
     return { totalByHour, total24h, totalPrev24h, delta24h, cats, newDishes };
   }, [statsRows]);
@@ -355,6 +504,20 @@ export function AdminModal({ onClose, toast }) {
     }
   };
 
+  const loadAdminOrders = async () => {
+    if (!adminId) return;
+    setAdminOrdersLoading(true);
+    try {
+      const list = await api.admin.orders.list(adminId);
+      setAdminOrders(Array.isArray(list) ? list : []);
+    } catch (e) {
+      toast?.err?.(e.message || t('admin_table_action_failed'));
+      setAdminOrders([]);
+    } finally {
+      setAdminOrdersLoading(false);
+    }
+  };
+
   const toggleMenuActive = async (it, nextActive) => {
     if (!adminId || !it?.id) return;
     setStopUpdatingId(it.id);
@@ -386,12 +549,6 @@ export function AdminModal({ onClose, toast }) {
     } finally {
       setDiscountUpdatingId(null);
     }
-  };
-
-  const resetStatsDemo = () => {
-    resetDishStatsState();
-    setDishStats({ v: 3, dishes: {} });
-    toast?.ok?.(t('admin_stats_reset_done'));
   };
 
   const startCreateMenu = () => {
@@ -468,6 +625,20 @@ export function AdminModal({ onClose, toast }) {
     }
   };
 
+  const handleMenuImageUpload = async (file) => {
+    if (!adminId || !file) return;
+    setMenuUploading(true);
+    try {
+      const uploaded = await api.uploads.image(adminId, file, 'menu');
+      setMenuForm((prev) => ({ ...prev, img: String(uploaded?.url || '') }));
+      toast?.ok?.('Изображение загружено');
+    } catch (e) {
+      toast?.err?.(e.message || 'Не удалось загрузить изображение');
+    } finally {
+      setMenuUploading(false);
+    }
+  };
+
   const loadEvents = async () => {
     if (!adminId) return;
     setEventsLoading(true);
@@ -478,6 +649,97 @@ export function AdminModal({ onClose, toast }) {
       toast?.err?.(e.message || t('admin_err_load_events'));
     } finally {
       setEventsLoading(false);
+    }
+  };
+
+  const loadReviews = async () => {
+    if (!adminId) return;
+    setReviewsLoading(true);
+    try {
+      const list = await api.reviews.list(false);
+      setReviews(Array.isArray(list) ? list : []);
+    } catch (e) {
+      toast?.err?.(e.message || t('admin_reviews_load_err'));
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  // Load API menu items for hero picker when hero tab opened
+  const loadHeroMenuItems = async () => {
+    try {
+      const list = await api.menu.list();
+      if (Array.isArray(list) && list.length > 0) setHeroMenuItems(list);
+    } catch { /* fallback to MENU constant */ }
+  };
+
+  const saveHeroConfig = () => {
+    try {
+      const json = JSON.stringify(heroConfig);
+      localStorage.setItem(HERO_CONFIG_KEY, json);
+      // Manually dispatch storage event so HeroPage in same tab reacts
+      window.dispatchEvent(new StorageEvent('storage', { key: HERO_CONFIG_KEY, newValue: json }));
+      setHeroSaved(true);
+      setTimeout(() => setHeroSaved(false), 2000);
+      toast?.ok?.(t('admin_hero_saved'));
+    } catch { /**/ }
+  };
+
+  const resetHeroConfig = () => {
+    setHeroConfig(DEFAULT_HERO_CONFIG);
+    try {
+      localStorage.removeItem(HERO_CONFIG_KEY);
+      window.dispatchEvent(new StorageEvent('storage', { key: HERO_CONFIG_KEY, newValue: null }));
+    } catch { /**/ }
+    toast?.ok?.(t('admin_hero_reset'));
+  };
+
+  const updateHeroSlot = (index, field, value) => {
+    setHeroConfig(prev => prev.map((slot, i) => i === index ? { ...slot, [field]: value } : slot));
+  };
+
+  const handleReviewReply = async (reviewId) => {
+    if (!adminId || !reviewReplyDraft.trim()) return;
+    setReviewUpdatingId(reviewId);
+    try {
+      const updated = await api.reviews.adminReply(adminId, reviewId, reviewReplyDraft.trim());
+      setReviews(prev => prev.map(r => r.id === reviewId ? updated : r));
+      setReviewReplyId(null);
+      setReviewReplyDraft('');
+      toast?.ok?.(t('admin_reviews_replied'));
+    } catch (e) {
+      toast?.err?.(e.message || t('admin_reviews_err'));
+    } finally {
+      setReviewUpdatingId(null);
+    }
+  };
+
+  const handleReviewFeature = async (reviewId, current) => {
+    if (!adminId) return;
+    setReviewUpdatingId(reviewId);
+    try {
+      const updated = await api.reviews.adminFeature(adminId, reviewId, !current);
+      setReviews(prev => prev.map(r => r.id === reviewId ? updated : r));
+      toast?.ok?.(current ? t('admin_reviews_unfeatured_ok') : t('admin_reviews_featured_ok'));
+    } catch (e) {
+      toast?.err?.(e.message || t('admin_reviews_err'));
+    } finally {
+      setReviewUpdatingId(null);
+    }
+  };
+
+  const handleReviewDelete = async (reviewId) => {
+    if (!adminId) return;
+    if (!window.confirm(t('admin_reviews_confirm_delete'))) return;
+    setReviewUpdatingId(reviewId);
+    try {
+      await api.reviews.adminDelete(adminId, reviewId);
+      setReviews(prev => prev.filter(r => r.id !== reviewId));
+      toast?.ok?.(t('admin_reviews_deleted'));
+    } catch (e) {
+      toast?.err?.(e.message || t('admin_reviews_err'));
+    } finally {
+      setReviewUpdatingId(null);
     }
   };
 
@@ -549,6 +811,65 @@ export function AdminModal({ onClose, toast }) {
       setAdminRestaurants([]);
     } finally {
       setAdminRestaurantsLoading(false);
+    }
+  };
+
+  const startCreateRestaurant = () => {
+    setRestaurantEditingId(null);
+    setRestaurantForm({ name: '', address: '', phone: '' });
+  };
+
+  const startEditRestaurant = (item) => {
+    setRestaurantEditingId(item?.id || null);
+    setRestaurantForm({
+      name: item?.name || '',
+      address: item?.address || '',
+      phone: item?.phone || '',
+    });
+  };
+
+  const saveRestaurant = async () => {
+    if (!adminId) return;
+    const payload = {
+      name: String(restaurantForm.name || '').trim(),
+      address: String(restaurantForm.address || '').trim(),
+      phone: String(restaurantForm.phone || '').trim() || null,
+    };
+    if (!payload.name || !payload.address) {
+      toast?.err?.('Укажите название и адрес ресторана');
+      return;
+    }
+    setRestaurantBusy(true);
+    try {
+      if (restaurantEditingId) await api.restaurants.adminUpdate(adminId, restaurantEditingId, payload);
+      else await api.restaurants.adminCreate(adminId, payload);
+      await loadAdminRestaurants();
+      startCreateRestaurant();
+      toast?.ok?.('Ресторан сохранён');
+    } catch (e) {
+      toast?.err?.(e.message || 'Не удалось сохранить ресторан');
+    } finally {
+      setRestaurantBusy(false);
+    }
+  };
+
+  const deleteRestaurant = async (item) => {
+    if (!adminId || !item?.id) return;
+    if (!window.confirm(`Удалить ресторан "${item.address || item.name}"?`)) return;
+    setRestaurantBusy(true);
+    try {
+      await api.restaurants.adminDelete(adminId, item.id);
+      await loadAdminRestaurants();
+      if (restaurantEditingId === item.id) startCreateRestaurant();
+      if (adminTablesRestaurantId === item.id) {
+        setAdminTablesRestaurantId(null);
+        setAdminTables([]);
+      }
+      toast?.ok?.('Ресторан удалён');
+    } catch (e) {
+      toast?.err?.(e.message || 'Не удалось удалить ресторан');
+    } finally {
+      setRestaurantBusy(false);
     }
   };
 
@@ -635,6 +956,479 @@ export function AdminModal({ onClose, toast }) {
   };
 
   useEffect(() => {
+    if (tab !== 'tables') return;
+    // Close editor when restaurant changes to avoid mismatched edits.
+    setTableEditor(null);
+  }, [adminTablesRestaurantId, tab]);
+
+  const nextTableName = useMemo(() => {
+    const nums = adminTables
+      .map((t) => String(t?.name || '').match(/(\d+)/))
+      .map((m) => (m ? Number(m[1]) : null))
+      .filter((n) => Number.isFinite(n));
+    const max = nums.length ? Math.max(...nums) : 0;
+    return `Table ${max + 1}`;
+  }, [adminTables]);
+
+  const openCreateTable = (preset = {}) => {
+    if (!adminTablesRestaurantId) return;
+    const seats = Number(preset.seats || 4);
+    const kind = preset.kind || 'standard';
+    const scale = typeof preset.scale === 'number' ? preset.scale : 1;
+    setTableEditor({
+      mode: 'create',
+      id: null,
+      name: preset.name || nextTableName,
+      seats: Math.max(2, Math.min(5, Number.isFinite(seats) ? seats : 4)),
+      kind,
+      scale,
+    });
+  };
+
+  const openEditTable = (tbl) => {
+    if (!tbl?.id) return;
+    setTableEditor({
+      mode: 'edit',
+      id: tbl.id,
+      name: tbl.name || '',
+      seats: Math.max(2, Math.min(5, Number(tbl.seats) || 2)),
+      kind: (tbl.kind || 'standard'),
+      scale: (tbl.scale == null ? 1 : Number(tbl.scale) || 1),
+    });
+  };
+
+  const saveTableEditor = async () => {
+    if (!adminId) return;
+    if (!tableEditor) return;
+    if (!adminTablesRestaurantId && tableEditor.mode === 'create') return;
+    const name = String(tableEditor.name || '').trim();
+    if (!name) return;
+    const seats = Math.max(2, Math.min(5, Number(tableEditor.seats) || 2));
+    const kind = String(tableEditor.kind || 'standard').trim().toLowerCase();
+    const scale = Number(tableEditor.scale);
+    setTableEditorBusy(true);
+    try {
+      if (tableEditor.mode === 'create') {
+        const created = await api.admin.tables.create(adminId, {
+          restaurant_id: adminTablesRestaurantId,
+          name,
+          seats,
+          kind,
+          scale: Number.isFinite(scale) ? scale : 1,
+        });
+        setAdminTables((prev) => [...prev, created].slice().sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0)));
+        toast?.ok?.(t('admin_table_created'));
+        setTableEditor(null);
+      } else {
+        const updated = await api.admin.tables.setMeta(adminId, tableEditor.id, {
+          name,
+          seats,
+          kind,
+          scale: Number.isFinite(scale) ? scale : 1,
+        });
+        setAdminTables((prev) => prev.map((x) => (x.id === tableEditor.id ? { ...x, ...updated } : x)));
+        toast?.ok?.(t('admin_table_updated'));
+      }
+    } catch (e) {
+      toast?.err?.(e?.message || t('admin_table_action_failed'));
+    } finally {
+      setTableEditorBusy(false);
+    }
+  };
+
+  const deleteTable = async (tbl) => {
+    if (!adminId || !tbl?.id) return;
+    if (!window.confirm(t('admin_table_delete_confirm'))) return;
+    setTableEditorBusy(true);
+    try {
+      await api.admin.tables.remove(adminId, tbl.id);
+      setAdminTables((prev) => prev.filter((x) => x.id !== tbl.id));
+      toast?.ok?.(t('admin_table_deleted'));
+      setTableEditor((prev) => (prev?.id === tbl.id ? null : prev));
+    } catch (e) {
+      toast?.err?.(e?.message || t('admin_table_action_failed'));
+    } finally {
+      setTableEditorBusy(false);
+    }
+  };
+
+  const deleteAllTablesForRestaurant = async () => {
+    if (!adminId || !adminTablesRestaurantId) return;
+    const confirmed1 = window.confirm('🚨 Удалить ВСЕ столики для этого ресторана?\n\nЭто действие нельзя отменить.');
+    if (!confirmed1) return;
+    const confirmed2 = window.confirm('⚠️ ВНИМАНИЕ! Это удалит ' + adminTables.length + ' столик(ов).\n\nНажмите OK ещё раз для подтверждения.');
+    if (!confirmed2) return;
+    setTableEditorBusy(true);
+    try {
+      const res = await api.admin.tables.removeAllForRestaurant(adminId, adminTablesRestaurantId);
+      setAdminTables([]);
+      setTableEditor(null);
+      toast?.ok?.(t('admin_table_delete_all_done', { count: res?.deleted ?? 0 }));
+    } catch (e) {
+      toast?.err?.(e?.message || t('admin_table_action_failed'));
+    } finally {
+      setTableEditorBusy(false);
+    }
+  };
+
+  const duplicateTable = async (tbl) => {
+    if (!adminId || !adminTablesRestaurantId || !tbl?.id) return;
+    setTableEditorBusy(true);
+    try {
+      const created = await api.admin.tables.create(adminId, {
+        restaurant_id: adminTablesRestaurantId,
+        name: `${tbl.name} (copy)`,
+        seats: tbl.seats,
+        kind: tbl.kind,
+        scale: tbl.scale,
+      });
+      // Offset the duplicate slightly
+      const offsetX = Number.isFinite(Number(tbl.x)) ? Number(tbl.x) + 20 : 260;
+      const offsetY = Number.isFinite(Number(tbl.y)) ? Number(tbl.y) + 20 : 180;
+      await api.admin.tables.setLayout(adminId, created.id, offsetX, offsetY);
+      setAdminTables(prev => [...prev, { ...created, x: offsetX, y: offsetY }].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0)));
+      toast?.ok?.('Столик скопирован');
+      setAdminLayoutContextMenu(null);
+    } catch (e) {
+      toast?.err?.(e?.message || t('admin_table_action_failed'));
+    } finally {
+      setTableEditorBusy(false);
+    }
+  };
+
+  const rotateDecor = (decorId, degrees = 15) => {
+    setAdminLayoutDecor((prev) => prev.map((item) => {
+      if (item.id !== decorId) return item;
+      const currentRot = Number(item.rotation || 0);
+      const newRot = (currentRot + degrees) % 360;
+      return { ...item, rotation: newRot };
+    }));
+  };
+
+  const deleteAllDecor = () => {
+    if (adminLayoutDecor.length === 0) return;
+    if (!window.confirm(`Удалить все ${adminLayoutDecor.length} элементов конструктора?\n\nЭто действие нельзя отменить.`)) return;
+    setAdminLayoutDecor([]);
+    setAdminLayoutSelectedDecorId(null);
+    toast?.ok?.(`Удалено ${adminLayoutDecor.length} элементов`);
+  };
+
+  const quickAddTable = async (preset) => {
+    if (!adminId || !adminTablesRestaurantId || tableEditorBusy) return;
+    const kind = preset.kind || 'standard';
+    const seats = preset.seats || 2;
+    const scale = preset.scale || 1;
+    const bar = kind === 'bar';
+    const usedNums = new Set(adminTables.map(tbl => {
+      const m = String(tbl.name || '').match(/(\d+)/);
+      return m ? Number(m[1]) : null;
+    }).filter(n => n !== null));
+    let n = bar ? 100 : 1;
+    while (usedNums.has(n)) n++;
+    const name = `T${n}`;
+    setTableEditorBusy(true);
+    try {
+      const created = await api.admin.tables.create(adminId, {
+        restaurant_id: adminTablesRestaurantId,
+        name, seats, kind, scale,
+      });
+      await api.admin.tables.setLayout(adminId, created.id, 240, 160);
+      setAdminTables(prev => [...prev, { ...created, x: 240, y: 160 }].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0)));
+      toast?.ok?.(t('admin_table_created'));
+    } catch (e) {
+      toast?.err?.(e?.message || t('admin_table_action_failed'));
+    } finally {
+      setTableEditorBusy(false);
+    }
+  };
+
+  const adminLayoutParams = useMemo(() => {
+    const variant = adminTablesRestaurantId ? (Number(adminTablesRestaurantId) % 3) : 0;
+    const baseCx = 240;
+    const baseCy = 160;
+    const rotDeg = variant === 1 ? 6 : variant === 2 ? -6 : 0;
+    const rot = (rotDeg * Math.PI) / 180;
+    const sin = rot ? Math.sin(rot) : 0;
+    const cos = rot ? Math.cos(rot) : 1;
+    const shiftX = variant === 1 ? 8 : variant === 2 ? -8 : 0;
+    const shiftY = variant === 1 ? -4 : variant === 2 ? 6 : 0;
+    return { variant, baseCx, baseCy, rot, sin, cos, shiftX, shiftY };
+  }, [adminTablesRestaurantId]);
+
+  const adminLayoutDisplayFor = useCallback((tbl, fallbackIndex) => {
+    const cx = 240;
+    const cy = 160;
+    const gapScaleX = 1.28;
+    const gapScaleY = 1.38;
+    const x0 = Number(tbl?.x);
+    const y0 = Number(tbl?.y);
+    const hasRaw = Number.isFinite(x0) && Number.isFinite(y0);
+    let x = hasRaw ? (x0 - cx) * gapScaleX + cx : null;
+    let y = hasRaw ? (y0 - cy) * gapScaleY + cy : null;
+
+    if (x == null || y == null) {
+      const fallbackCols = 4;
+      const fallbackStartX = 72;
+      const fallbackStartY = 68;
+      const fallbackStepX = 92;
+      const fallbackStepY = 72;
+      const i = Math.max(0, Number(fallbackIndex) || 0);
+      const col = i % fallbackCols;
+      const row = Math.floor(i / fallbackCols);
+      x = fallbackStartX + col * fallbackStepX;
+      y = fallbackStartY + row * fallbackStepY;
+    }
+
+    const { baseCx, baseCy, sin, cos, shiftX, shiftY } = adminLayoutParams;
+    const dx = x - baseCx;
+    const dy = y - baseCy;
+    const xr = baseCx + dx * cos - dy * sin + shiftX;
+    const yr = baseCy + dx * sin + dy * cos + shiftY;
+    return { x: xr * ADMIN_LAYOUT_SCALE, y: yr * ADMIN_LAYOUT_SCALE };
+  }, [adminLayoutParams]);
+
+  const adminLayoutClampPan = useCallback((pan, zoom) => {
+    const z = Math.max(ADMIN_LAYOUT_MIN_ZOOM, Math.min(ADMIN_LAYOUT_MAX_ZOOM, Number(zoom) || 1));
+    const vbW = ADMIN_LAYOUT_W / z;
+    const vbH = ADMIN_LAYOUT_H / z;
+    const maxX = Math.max(0, ADMIN_LAYOUT_W - vbW);
+    const maxY = Math.max(0, ADMIN_LAYOUT_H - vbH);
+    const x = Math.max(0, Math.min(maxX, Number(pan?.x) || 0));
+    const y = Math.max(0, Math.min(maxY, Number(pan?.y) || 0));
+    return { x, y };
+  }, []);
+
+  const adminLayoutViewBox = useMemo(() => {
+    const z = Math.max(ADMIN_LAYOUT_MIN_ZOOM, Math.min(ADMIN_LAYOUT_MAX_ZOOM, Number(adminLayoutZoom) || 1));
+    const pan = adminLayoutClampPan(adminLayoutPan, z);
+    const vbW = ADMIN_LAYOUT_W / z;
+    const vbH = ADMIN_LAYOUT_H / z;
+    return { x: pan.x, y: pan.y, w: vbW, h: vbH, z, str: `${pan.x} ${pan.y} ${vbW} ${vbH}` };
+  }, [adminLayoutClampPan, adminLayoutPan, adminLayoutZoom]);
+
+  const adminLayoutSetZoom = useCallback((nextZoom) => {
+    const z = Math.max(ADMIN_LAYOUT_MIN_ZOOM, Math.min(ADMIN_LAYOUT_MAX_ZOOM, Number(nextZoom) || 1));
+    setAdminLayoutPan((prev) => {
+      const curZ = Math.max(ADMIN_LAYOUT_MIN_ZOOM, Math.min(ADMIN_LAYOUT_MAX_ZOOM, Number(adminLayoutZoom) || 1));
+      const curW = ADMIN_LAYOUT_W / curZ;
+      const curH = ADMIN_LAYOUT_H / curZ;
+      const cx = (Number(prev?.x) || 0) + curW / 2;
+      const cy = (Number(prev?.y) || 0) + curH / 2;
+      const nextW = ADMIN_LAYOUT_W / z;
+      const nextH = ADMIN_LAYOUT_H / z;
+      return adminLayoutClampPan({ x: cx - nextW / 2, y: cy - nextH / 2 }, z);
+    });
+    setAdminLayoutZoom(z);
+  }, [adminLayoutClampPan, adminLayoutZoom]);
+
+  const adminLayoutZoomAt = useCallback((pt, nextZoom) => {
+    const z = Math.max(ADMIN_LAYOUT_MIN_ZOOM, Math.min(ADMIN_LAYOUT_MAX_ZOOM, Number(nextZoom) || 1));
+    const vb = adminLayoutViewBox;
+    const relX = vb.w ? (pt.x - vb.x) / vb.w : 0.5;
+    const relY = vb.h ? (pt.y - vb.y) / vb.h : 0.5;
+    const nextW = ADMIN_LAYOUT_W / z;
+    const nextH = ADMIN_LAYOUT_H / z;
+    const nextPan = adminLayoutClampPan({ x: pt.x - relX * nextW, y: pt.y - relY * nextH }, z);
+    setAdminLayoutZoom(z);
+    setAdminLayoutPan(nextPan);
+  }, [adminLayoutClampPan, adminLayoutViewBox]);
+
+  const adminLayoutClientToSvg = (clientX, clientY) => {
+    const svg = adminLayoutSvgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return {
+      x: (clientX - rect.left) * (adminLayoutViewBox.w / rect.width) + adminLayoutViewBox.x,
+      y: (clientY - rect.top) * (adminLayoutViewBox.h / rect.height) + adminLayoutViewBox.y,
+    };
+  };
+
+  const makeDecorId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const moveDecorBy = useCallback((item, dx, dy) => {
+    if (!item) return item;
+    if (item.type === 'wall' || item.type === 'door' || item.type === 'window') {
+      return {
+        ...item,
+        x1: Number(item.x1 || 0) + dx,
+        y1: Number(item.y1 || 0) + dy,
+        x2: Number(item.x2 || 0) + dx,
+        y2: Number(item.y2 || 0) + dy,
+      };
+    }
+    return {
+      ...item,
+      x: Number(item.x || 0) + dx,
+      y: Number(item.y || 0) + dy,
+    };
+  }, []);
+
+  const addDecorAtPoint = useCallback((pt) => {
+    if (!pt || !adminTablesRestaurantId) return;
+    const base = { id: makeDecorId(), color: 'rgba(201,169,110,0.88)', rotation: 0 };
+    let next = null;
+    if (adminLayoutTool === 'wall') {
+      next = { ...base, type: 'wall', x1: pt.x - 64, y1: pt.y, x2: pt.x + 64, y2: pt.y };
+    } else if (adminLayoutTool === 'window') {
+      next = { ...base, type: 'window', x1: pt.x - 54, y1: pt.y, x2: pt.x + 54, y2: pt.y, color: 'rgba(136,191,255,0.92)' };
+    } else if (adminLayoutTool === 'door') {
+      next = { ...base, type: 'door', x1: pt.x - 18, y1: pt.y + 24, x2: pt.x + 18, y2: pt.y - 24 };
+    } else if (adminLayoutTool === 'zone') {
+      next = { ...base, type: 'zone', x: pt.x - 80, y: pt.y - 46, w: 160, h: 92, text: adminLayoutDraftText || 'Зона' };
+    } else if (adminLayoutTool === 'text') {
+      next = { ...base, type: 'text', x: pt.x, y: pt.y, text: adminLayoutDraftText || 'Текст' };
+    }
+    if (!next) return;
+    setAdminLayoutDecor((prev) => [...prev, next]);
+    setAdminLayoutSelectedDecorId(next.id);
+    setAdminLayoutSelectedId(null);
+  }, [adminLayoutDraftText, adminLayoutTool, adminTablesRestaurantId]);
+
+  useEffect(() => {
+    return () => {
+      const drag = adminLayoutDragRef.current;
+      if (drag?.moveHandler) window.removeEventListener('pointermove', drag.moveHandler);
+      if (drag?.upHandler) window.removeEventListener('pointerup', drag.upHandler);
+      const pan = adminLayoutPanDragRef.current;
+      if (pan?.moveHandler) window.removeEventListener('pointermove', pan.moveHandler);
+      if (pan?.upHandler) window.removeEventListener('pointerup', pan.upHandler);
+      const decor = adminLayoutDecorDragRef.current;
+      if (decor?.moveHandler) window.removeEventListener('pointermove', decor.moveHandler);
+      if (decor?.upHandler) window.removeEventListener('pointerup', decor.upHandler);
+    };
+  }, []);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setAdminLayoutContextMenu(null);
+    };
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Keyboard shortcuts for layout editor
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (tab !== 'tables' || !adminTablesRestaurantId) return;
+      
+      // Ctrl+Z - Undo (placeholder for future implementation)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        // TODO: Implement undo functionality
+        return;
+      }
+      
+      // Delete - Remove selected table or decor
+      if (e.key === 'Delete' && !tableEditorBusy) {
+        if (adminLayoutSelectedId) {
+          const sel = adminTables.find(t => t.id === adminLayoutSelectedId);
+          if (sel) {
+            deleteTable(sel);
+            setAdminLayoutSelectedId(null);
+          }
+        } else if (adminLayoutSelectedDecorId) {
+          setAdminLayoutDecor((prev) => prev.filter((item) => item.id !== adminLayoutSelectedDecorId));
+          setAdminLayoutSelectedDecorId(null);
+        }
+        return;
+      }
+      
+      // R - Rotate selected decoration
+      if (e.key === 'r' && !tableEditorBusy && adminLayoutSelectedDecorId) {
+        e.preventDefault();
+        rotateDecor(adminLayoutSelectedDecorId, e.shiftKey ? -15 : 15);
+        return;
+      }
+      
+      // Space - Toggle panorama mode
+      if (e.key === ' ' && !tableEditorBusy) {
+        e.preventDefault();
+        setAdminLayoutTool(prev => prev === 'pan' ? 'select' : 'pan');
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tab, adminTablesRestaurantId, adminLayoutSelectedId, adminLayoutSelectedDecorId, tableEditorBusy, deleteTable, rotateDecor]);
+
+  useEffect(() => {
+    // reset on restaurant change
+    setAdminLayoutZoom(1);
+    setAdminLayoutPan({ x: 0, y: 0 });
+    setAdminLayoutSelectedDecorId(null);
+  }, [adminTablesRestaurantId]);
+
+  useEffect(() => {
+    if (!adminTablesRestaurantId) {
+      setAdminLayoutDecor([]);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(adminLayoutDecorKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setAdminLayoutDecor(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setAdminLayoutDecor([]);
+    }
+  }, [adminLayoutDecorKey, adminTablesRestaurantId]);
+
+  useEffect(() => {
+    if (!adminTablesRestaurantId) return;
+    try {
+      localStorage.setItem(adminLayoutDecorKey, JSON.stringify(adminLayoutDecor));
+    } catch {
+      // ignore quota and serialization issues
+    }
+  }, [adminLayoutDecor, adminLayoutDecorKey, adminTablesRestaurantId]);
+
+  const adminLayoutPlacements = useMemo(() => {
+    const placements = adminTables.map((tbl, i) => {
+      const c = adminLayoutDisplayFor(tbl, i);
+      return { tbl, x: c.x, y: c.y, i };
+    });
+    for (let pass = 0; pass < 10; pass++) {
+      let moved = false;
+      for (let ii = 0; ii < placements.length; ii++) {
+        const a = placements[ii];
+        const barA = String(a.tbl?.kind || '').trim().toLowerCase() === 'bar';
+        const scA = Math.max(0.7, Math.min(1.6, Number(a.tbl?.scale) || 1));
+        const stA = Math.max(1, Number(a.tbl?.seats || 2));
+        const hwA = (barA ? 15 : stA >= 4 ? 32 : 28) * scA;
+        const hhA = (barA ? 15 : stA >= 4 ? 20 : 18) * scA;
+        for (let jj = ii + 1; jj < placements.length; jj++) {
+          const b = placements[jj];
+          const barB = String(b.tbl?.kind || '').trim().toLowerCase() === 'bar';
+          const scB = Math.max(0.7, Math.min(1.6, Number(b.tbl?.scale) || 1));
+          const stB = Math.max(1, Number(b.tbl?.seats || 2));
+          const hwB = (barB ? 15 : stB >= 4 ? 32 : 28) * scB;
+          const hhB = (barB ? 15 : stB >= 4 ? 20 : 18) * scB;
+          const reqX = hwA + hwB + 10;
+          const reqY = hhA + hhB + 12;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const ovX = reqX - Math.abs(dx), ovY = reqY - Math.abs(dy);
+          if (ovX > 0 && ovY > 0) {
+            moved = true;
+            if (ovX <= ovY) {
+              const push = ovX / 2 + 2;
+              const dir = dx >= 0 ? 1 : -1;
+              a.x -= dir * push; b.x += dir * push;
+            } else {
+              const push = ovY / 2 + 2;
+              const dir = dy >= 0 ? 1 : -1;
+              a.y -= dir * push; b.y += dir * push;
+            }
+          }
+        }
+      }
+      if (!moved) break;
+    }
+    return placements;
+  }, [adminTables, adminLayoutDisplayFor]);
+
+  useEffect(() => {
     if (tab !== 'menu') return;
     loadMenu();
     startCreateMenu();
@@ -644,6 +1438,19 @@ export function AdminModal({ onClose, toast }) {
   useEffect(() => {
     if (tab !== 'stoplist' && tab !== 'stats') return;
     loadMenu();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'stats' && tab !== 'orders') return;
+    loadAdminOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'restaurants') return;
+    loadAdminRestaurants();
+    startCreateRestaurant();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -682,28 +1489,10 @@ export function AdminModal({ onClose, toast }) {
   }, [adminTablesRestaurantId, tab]);
 
   useEffect(() => {
-    if (tab !== 'stats') return;
-
-    const tick = () => {
-      const now = Date.now();
-      setStatsNow(now);
-      setDishStats((prev) => {
-        const next = upsertAndAdvanceDishStatsState(prev, menuItems, now);
-        if (next.changed) saveDishStatsState(next.state);
-        return next.state;
-      });
-    };
-
-    tick();
-    const id = setInterval(tick, 10_000);
-    return () => clearInterval(id);
-  }, [menuItems, tab]);
-
-  useEffect(() => {
-    if (tab !== 'stats') return;
+    if (tab !== 'stats' && tab !== 'orders') return;
     const id = setInterval(() => {
-      loadMenu();
-    }, 60_000);
+      loadAdminOrders();
+    }, 30_000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -737,8 +1526,20 @@ export function AdminModal({ onClose, toast }) {
           <button type="button" className={`admin-tab${tab === 'reservations' ? ' on' : ''}`} onClick={() => setTab('reservations')}>
             <Icons.Cal /> {t('admin_tab_reservations')}
           </button>
+          <button type="button" className={`admin-tab${tab === 'orders' ? ' on' : ''}`} onClick={() => { setTab('orders'); loadAdminOrders(); }}>
+            <Icons.Cart /> Заказы
+          </button>
+          <button type="button" className={`admin-tab${tab === 'restaurants' ? ' on' : ''}`} onClick={() => setTab('restaurants')}>
+            <Icons.Map /> Рестораны
+          </button>
           <button type="button" className={`admin-tab${tab === 'tables' ? ' on' : ''}`} onClick={() => setTab('tables')}>
             <Icons.Lock /> {t('admin_tab_tables')}
+          </button>
+          <button type="button" className={`admin-tab${tab === 'reviews' ? ' on' : ''}`} onClick={() => { setTab('reviews'); loadReviews(); }}>
+            <Icons.Star /> {t('admin_tab_reviews')}
+          </button>
+          <button type="button" className={`admin-tab${tab === 'hero' ? ' on' : ''}`} onClick={() => { setTab('hero'); loadHeroMenuItems(); }}>
+            <Icons.Image /> {t('admin_hero_tab')}
           </button>
         </div>
 
@@ -836,11 +1637,20 @@ export function AdminModal({ onClose, toast }) {
                   <button type="button" className="btn btn-ghost" onClick={loadAdminReservations} disabled={adminReservationsLoading}>
                     <Icons.Refresh /> {t('refresh')}
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setAdminHidePastReservations((v) => !v)}
+                    disabled={adminReservationsLoading}
+                    title={adminHidePastReservations ? t('admin_show_all') : t('admin_hide_past_reservations')}
+                  >
+                    <Icons.Clock /> {adminHidePastReservations ? t('admin_show_all') : t('admin_hide_old')}
+                  </button>
                 </div>
                 <div className="admin-panel-scroll">
                   {adminReservationsLoading && <div className="admin-muted">{t('loading')}</div>}
-                  {!adminReservationsLoading && adminReservations.length === 0 && <div className="admin-muted">{t('admin_no_reservations')}</div>}
-                  {adminReservations.map((r) => {
+                  {!adminReservationsLoading && adminReservationsFiltered.length === 0 && <div className="admin-muted">{t('admin_no_reservations')}</div>}
+                  {adminReservationsFiltered.map((r) => {
                     const ids = Array.isArray(r?.table_ids) ? r.table_ids : (r?.table_id ? [r.table_id] : []);
                     const addr = restaurantById.get(r?.restaurant_id)?.address || r?.restaurant?.address || (r?.restaurant_id ? `#${r.restaurant_id}` : '—');
                     const tablesLabel = ids.length === 0 ? t('admin_table_dash') : (ids.length === 1 ? t('table_one', { id: ids[0] }) : t('table_many', { ids: ids.join(', ') }));
@@ -904,6 +1714,119 @@ export function AdminModal({ onClose, toast }) {
             </div>
           )}
 
+          {tab === 'orders' && (
+            <div className="admin-split">
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div>
+                    <div className="admin-panel-title">Доставка и самовывоз</div>
+                    <div className="admin-muted">Кто, куда и что заказал</div>
+                  </div>
+                  <button type="button" className="btn btn-ghost" onClick={loadAdminOrders} disabled={adminOrdersLoading}>
+                    <Icons.Refresh /> {t('refresh')}
+                  </button>
+                </div>
+                <div className="admin-panel-scroll">
+                  {adminOrdersLoading && <div className="admin-muted">{t('loading')}</div>}
+                  {!adminOrdersLoading && adminOrders.length === 0 && <div className="admin-muted">Заказов пока нет.</div>}
+                  {adminOrders.map((order) => {
+                    const rest = restaurantById.get(order?.restaurant_id)?.address || (order?.restaurant_id ? `Ресторан #${order.restaurant_id}` : 'Не указан');
+                    const items = Array.isArray(order?.items) ? order.items : [];
+                    return (
+                      <div key={order.id} className="admin-row">
+                        <div className="admin-row-main">
+                          <div className="admin-row-name">
+                            Заказ #{order.id}
+                            <span className={`admin-status ${order?.fulfillment === 'pickup' ? 'wait' : 'ok'}`}>
+                              {order?.fulfillment === 'pickup' ? 'Самовывоз' : 'Доставка'}
+                            </span>
+                          </div>
+                          <div className="admin-row-sub">
+                            {order?.created_at ? new Date(order.created_at).toLocaleString() : 'Без даты'} · {rest}
+                          </div>
+                          <div className="admin-row-sub">
+                            {order?.fulfillment_time ? `На ${order.fulfillment_time}` : 'Время не указано'} · {order?.payment || 'Оплата не указана'} · {order?.total || 0} ₽
+                          </div>
+                          <div className="admin-row-sub">
+                            {order?.address ? `Адрес: ${order.address}` : 'Адрес не указан'}
+                          </div>
+                          {order?.comment && <div className="admin-row-sub">Комментарий: {order.comment}</div>}
+                          <div className="admin-order-items">
+                            {items.length === 0 && <span className="admin-order-chip">Без состава</span>}
+                            {items.map((item, idx) => (
+                              <span key={`${order.id}-${item?.id || idx}`} className="admin-order-chip">
+                                {item?.name || `Позиция #${idx + 1}`} ×{item?.qty || item?.quantity || 1}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="admin-stub">
+                <div className="admin-stub-h">Что видно сразу</div>
+                <div className="admin-muted">Вкладка собирает все заказы в одном месте: тип получения, ресторан-источник, адрес, время и состав корзины.</div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'restaurants' && (
+            <div className="admin-split">
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div className="admin-panel-title">Адреса ресторанов</div>
+                  <button type="button" className="btn btn-ghost" onClick={loadAdminRestaurants} disabled={adminRestaurantsLoading || restaurantBusy}>
+                    <Icons.Refresh /> {t('refresh')}
+                  </button>
+                </div>
+                <div className="admin-panel-scroll">
+                  {adminRestaurantsLoading && <div className="admin-muted">{t('loading')}</div>}
+                  {!adminRestaurantsLoading && adminRestaurants.length === 0 && <div className="admin-muted">Ресторанов пока нет.</div>}
+                  {adminRestaurants.map((item) => (
+                    <div key={item.id} className="admin-row">
+                      <div className="admin-row-main">
+                        <div className="admin-row-name">{item.name || `Ресторан #${item.id}`}</div>
+                        <div className="admin-row-sub">{item.address || 'Адрес не указан'}</div>
+                        <div className="admin-row-sub">{item.phone || 'Телефон не указан'}</div>
+                      </div>
+                      <div className="admin-row-actions">
+                        <button type="button" className="btn btn-ghost" onClick={() => startEditRestaurant(item)} disabled={restaurantBusy}>Изменить</button>
+                        <button type="button" className="btn btn-outline-gold" onClick={() => deleteRestaurant(item)} disabled={restaurantBusy}>Удалить</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="admin-panel">
+                <div className="admin-panel-h">
+                  <div className="admin-panel-title">{restaurantEditingId ? `Редактирование #${restaurantEditingId}` : 'Новый ресторан'}</div>
+                  <button type="button" className="btn btn-ghost" onClick={startCreateRestaurant} disabled={restaurantBusy}>{t('admin_clear')}</button>
+                </div>
+                <div className="admin-form">
+                  <div className="fg">
+                    <div className="fl">Название</div>
+                    <input className="fi" type="text" value={restaurantForm.name} onChange={(e) => setRestaurantForm((p) => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div className="fg">
+                    <div className="fl">Адрес</div>
+                    <input className="fi" type="text" value={restaurantForm.address} onChange={(e) => setRestaurantForm((p) => ({ ...p, address: e.target.value }))} />
+                  </div>
+                  <div className="fg">
+                    <div className="fl">Телефон</div>
+                    <input className="fi" type="text" value={restaurantForm.phone} onChange={(e) => setRestaurantForm((p) => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                  <button type="button" className="btn btn-gold" onClick={saveRestaurant} disabled={restaurantBusy}>
+                    <Icons.Sparkles /> {restaurantBusy ? 'Сохраняю…' : 'Сохранить ресторан'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {tab === 'tables' && (
             <div className="admin-split">
               <div className="admin-panel">
@@ -916,6 +1839,24 @@ export function AdminModal({ onClose, toast }) {
                     disabled={adminTablesLoading || adminRestaurantsLoading}
                   >
                     <Icons.Refresh /> {t('refresh')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-gold"
+                    onClick={() => openCreateTable()}
+                    disabled={!adminTablesRestaurantId || tableEditorBusy}
+                    title={!adminTablesRestaurantId ? t('admin_pick_restaurant') : undefined}
+                  >
+                    + {t('admin_table_add')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={deleteAllTablesForRestaurant}
+                    disabled={!adminTablesRestaurantId || tableEditorBusy || adminTablesLoading}
+                    title={t('admin_table_delete_all')}
+                  >
+                    <Icons.Trash /> {t('admin_table_delete_all')}
                   </button>
                 </div>
                 <div className="admin-panel-scroll">
@@ -945,38 +1886,1030 @@ export function AdminModal({ onClose, toast }) {
                   )}
 
                   {!adminTablesLoading && adminTablesRestaurantId && adminTables.length > 0 && (
-                    <div className="admin-table-grid">
-                      {adminTables.map((tbl) => {
-                        const busy = adminTableUpdatingId === tbl.id;
-                        const statusClass = tbl.is_blocked ? 'bad' : 'ok';
-                        const statusText = tbl.is_blocked ? t('admin_table_status_blocked') : t('admin_table_status_available');
-                        const num = String(tbl?.name || '').match(/(\d+)/);
-                        const title = num ? t('admin_table_number', { n: num[1] }) : (tbl?.name || `#${tbl.id}`);
-                        return (
-                          <button
-                            key={tbl.id}
-                            type="button"
-                            className={`admin-table-card${tbl.is_blocked ? ' blocked' : ''}`}
-                            onClick={() => toggleTableBlocked(tbl)}
-                            disabled={busy}
-                            title={t('admin_table_toggle_hint')}
-                          >
-                            <div className="admin-table-top">
-                              <div className="admin-table-title">{title}</div>
-                              <span className={`admin-status ${statusClass}`}>{busy ? '…' : statusText}</span>
+                    <>
+                      <div className="admin-stub" style={{ marginBottom: 12 }}>
+                        <div className="admin-stub-h">{t('admin_tables_manage')}</div>
+                        <div className="admin-muted">{t('admin_blocking_help')}</div>
+                      </div>
+
+                      {tableEditor && (
+                        <div className="admin-stub" style={{ marginBottom: 12 }}>
+                          <div className="admin-stub-h">
+                            {tableEditor.mode === 'create' ? t('admin_table_add') : t('admin_table_edit')}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10, marginTop: 10 }}>
+                            <div className="fg" style={{ marginBottom: 0 }}>
+                              <div className="fl">{t('admin_table_name')}</div>
+                              <input
+                                className="fi"
+                                type="text"
+                                value={tableEditor.name}
+                                onChange={(e) => setTableEditor((p) => ({ ...p, name: e.target.value }))}
+                                disabled={tableEditorBusy}
+                              />
                             </div>
-                            <div className="admin-table-sub">{t('seats', { count: tbl.seats })} · {t('admin_id')}: {tbl.id}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                            <div className="fg" style={{ marginBottom: 0 }}>
+                              <div className="fl">{t('admin_table_seats')}</div>
+                              <select
+                                className="fi"
+                                value={tableEditor.seats}
+                                onChange={(e) => setTableEditor((p) => ({ ...p, seats: Number(e.target.value) }))}
+                                disabled={tableEditorBusy}
+                              >
+                                {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
+                            <div className="fg" style={{ marginBottom: 0 }}>
+                              <div className="fl">{t('admin_table_type')}</div>
+                              <select
+                                className="fi"
+                                value={tableEditor.kind}
+                                onChange={(e) => setTableEditor((p) => ({ ...p, kind: e.target.value }))}
+                                disabled={tableEditorBusy}
+                              >
+                                <option value="standard">{t('admin_table_type_standard')}</option>
+                                <option value="round">{t('admin_table_type_round')}</option>
+                                <option value="booth">{t('admin_table_type_booth')}</option>
+                                <option value="bar">{t('admin_table_type_bar')}</option>
+                              </select>
+                            </div>
+                            <div className="fg" style={{ marginBottom: 0 }}>
+                              <div className="fl">{t('admin_table_size')}</div>
+                              <input
+                                className="fi"
+                                type="number"
+                                min="0.7"
+                                max="1.6"
+                                step="0.05"
+                                value={tableEditor.scale}
+                                onChange={(e) => setTableEditor((p) => ({ ...p, scale: Number(e.target.value) }))}
+                                disabled={tableEditorBusy}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                            <button type="button" className="btn btn-ghost" onClick={() => openCreateTable({ seats: 2, kind: 'standard' })} disabled={tableEditorBusy}>
+                              +2
+                            </button>
+                            <button type="button" className="btn btn-ghost" onClick={() => openCreateTable({ seats: 4, kind: 'standard' })} disabled={tableEditorBusy}>
+                              +4
+                            </button>
+                            <button type="button" className="btn btn-ghost" onClick={() => openCreateTable({ seats: 4, kind: 'round' })} disabled={tableEditorBusy}>
+                              {t('admin_table_type_round')}
+                            </button>
+                            <button type="button" className="btn btn-ghost" onClick={() => openCreateTable({ seats: 4, kind: 'booth' })} disabled={tableEditorBusy}>
+                              {t('admin_table_type_booth')}
+                            </button>
+                            <button type="button" className="btn btn-ghost" onClick={() => openCreateTable({ seats: 2, kind: 'bar', scale: 0.9 })} disabled={tableEditorBusy}>
+                              {t('admin_table_type_bar')}
+                            </button>
+                            <div style={{ flex: 1 }} />
+                            <button type="button" className="btn btn-outline-gold" onClick={saveTableEditor} disabled={tableEditorBusy || !String(tableEditor.name || '').trim()}>
+                              {t('admin_save')}
+                            </button>
+                            <button type="button" className="btn btn-ghost" onClick={() => setTableEditor(null)} disabled={tableEditorBusy}>
+                              {t('close')}
+                            </button>
+                            {tableEditor.mode === 'edit' && (
+                              <button type="button" className="btn btn-ghost" onClick={() => deleteTable({ id: tableEditor.id })} disabled={tableEditorBusy}>
+                                <Icons.Trash /> {t('admin_table_delete')}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="admin-table-grid">
+                        {adminTables.map((tbl) => {
+                          const busy = adminTableUpdatingId === tbl.id;
+                          const statusClass = tbl.is_blocked ? 'bad' : 'ok';
+                          const statusText = tbl.is_blocked ? t('admin_table_status_blocked') : t('admin_table_status_available');
+                          const num = String(tbl?.name || '').match(/(\d+)/);
+                          const title = num ? t('admin_table_number', { n: num[1] }) : (tbl?.name || `#${tbl.id}`);
+                          return (
+                            <div key={tbl.id} style={{ position: 'relative' }}>
+                              <button
+                                type="button"
+                                className={`admin-table-card${tbl.is_blocked ? ' blocked' : ''}`}
+                                onClick={() => toggleTableBlocked(tbl)}
+                                disabled={busy}
+                                title={t('admin_table_toggle_hint')}
+                                style={{ width: '100%' }}
+                              >
+                                <div className="admin-table-top">
+                                  <div className="admin-table-title">{title}</div>
+                                  <span className={`admin-status-dot ${statusClass}`} title={statusText} aria-label={statusText} />
+                                </div>
+                                <div className="admin-table-sub">{t('seats', { count: tbl.seats })} · {t('admin_id')}: {tbl.id}</div>
+                              </button>
+                              <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  className="ico-btn"
+                                  onClick={(e) => { e.stopPropagation(); openEditTable(tbl); }}
+                                  title={t('admin_table_edit')}
+                                  aria-label={t('admin_table_edit')}
+                                >
+                                  <Icons.Edit />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ico-btn"
+                                  onClick={(e) => { e.stopPropagation(); deleteTable(tbl); }}
+                                  title={t('admin_table_delete')}
+                                  aria-label={t('admin_table_delete')}
+                                >
+                                  <Icons.Trash />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
 
               <div className="admin-stub">
-                <div className="admin-stub-h">{t('admin_blocking')}</div>
-                <div className="admin-muted">{t('admin_blocking_help')}</div>
+                <div className="admin-stub-h">{t('admin_layout_title')}</div>
+                <div className="admin-muted">{t('admin_layout_help')}</div>
+
+                {!adminTablesRestaurantId && (
+                  <div className="admin-muted" style={{ marginTop: 12 }}>
+                    {t('admin_pick_restaurant')}
+                  </div>
+                )}
+
+                {adminTablesRestaurantId && !adminTablesLoading && (
+                  <div style={{ marginTop: 12 }}>
+                    {/* Improved Toolbar with Logical Blocks */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                      {/* Block 1: Добавить столы */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,0,0,0.15)', borderRadius: 10 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '1px' }}>Добавить</span>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {[
+                            { seats: 2, kind: 'standard', icon: '▢', title: '2 места' },
+                            { seats: 4, kind: 'standard', icon: '▭', title: '4 места' },
+                            { seats: 4, kind: 'round', icon: '●', title: 'Круглый' },
+                            { seats: 4, kind: 'booth', icon: '⊞', title: 'Кабинка' },
+                            { seats: 2, kind: 'bar', scale: 0.9, icon: '—', title: 'Барная стойка' },
+                          ].map((preset) => (
+                            <button
+                              key={`${preset.kind}-${preset.seats}`}
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{
+                                fontSize: 14,
+                                padding: '6px 8px',
+                                minWidth: 0,
+                                border: '1.5px solid rgba(201,169,110,0.40)',
+                                background: 'rgba(201,169,110,0.06)',
+                                color: 'var(--gold)',
+                              }}
+                              onClick={() => quickAddTable(preset)}
+                              disabled={tableEditorBusy}
+                              title={preset.title}
+                            >
+                              {preset.icon}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Block 2: Режим */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,0,0,0.15)', borderRadius: 10 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '1px' }}>Режим</span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {[
+                            ['pan', '🖱'],
+                            ['select', '▢'],
+                          ].map(([toolId, icon]) => (
+                            <button
+                              key={toolId}
+                              type="button"
+                              className={`btn ${adminLayoutTool === toolId ? 'btn-gold' : 'btn-ghost'}`}
+                              style={{ fontSize: 12, padding: '6px 10px', minWidth: 0 }}
+                              onClick={() => setAdminLayoutTool(toolId)}
+                              disabled={tableEditorBusy}
+                              title={toolId === 'pan' ? 'Панорама (Space)' : 'Выбор'}
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Block 3: Конструктор */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,0,0,0.15)', borderRadius: 10 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '1px' }}>Конструктор</span>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {[
+                            ['wall', '|'],
+                            ['door', '🚪'],
+                            ['window', '▭'],
+                            ['zone', '⊕'],
+                            ['text', 'Т'],
+                          ].map(([toolId, icon]) => (
+                            <button
+                              key={toolId}
+                              type="button"
+                              className={adminLayoutTool === toolId ? 'btn btn-gold' : 'btn btn-ghost'}
+                              style={{ fontSize: 11, padding: '6px 10px', minWidth: 0 }}
+                              onClick={() => setAdminLayoutTool(toolId)}
+                              disabled={tableEditorBusy}
+                              title={toolId}
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                        {(adminLayoutTool === 'zone' || adminLayoutTool === 'text') && (
+                          <input
+                            className="fi"
+                            type="text"
+                            value={adminLayoutDraftText}
+                            onChange={(e) => setAdminLayoutDraftText(e.target.value)}
+                            placeholder="Подпись"
+                            disabled={tableEditorBusy}
+                            style={{ fontSize: 11, padding: '6px 8px', width: 120, marginLeft: 8 }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Actions row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {adminLayoutSelectedDecorId && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{ fontSize: 11, padding: '6px 10px', color: 'rgba(220,80,70,0.9)' }}
+                            onClick={() => {
+                              setAdminLayoutDecor((prev) => prev.filter((item) => item.id !== adminLayoutSelectedDecorId));
+                              setAdminLayoutSelectedDecorId(null);
+                            }}
+                            disabled={tableEditorBusy}
+                          >
+                            🗑 Удалить объект
+                          </button>
+                        )}
+                        {adminLayoutDecor.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{ fontSize: 11, padding: '6px 10px', color: 'rgba(220,80,70,0.8)' }}
+                            onClick={deleteAllDecor}
+                            disabled={tableEditorBusy}
+                            title={`Удалить все ${adminLayoutDecor.length} элементов конструктора`}
+                          >
+                            🗑 Очистить всё ({adminLayoutDecor.length})
+                          </button>
+                        )}
+                        {adminLayoutSelectedId && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{ fontSize: 11, padding: '6px 10px', color: 'rgba(220,80,70,0.9)' }}
+                            onClick={() => {
+                              const sel = adminTables.find(t => t.id === adminLayoutSelectedId);
+                              if (sel) deleteTable(sel);
+                              setAdminLayoutSelectedId(null);
+                            }}
+                            disabled={tableEditorBusy}
+                          >
+                            ✕ {t('admin_table_delete')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ width: '100%', maxWidth: 1040, background: 'linear-gradient(180deg,#141414,#0a0a0a)', borderRadius: 10, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)', position: 'relative' }}
+                      onClick={() => { setAdminLayoutSelectedId(null); setAdminLayoutSelectedDecorId(null); }}
+                    >
+                      <svg
+                        ref={adminLayoutSvgRef}
+                        viewBox={adminLayoutViewBox.str}
+                        preserveAspectRatio="xMidYMid meet"
+                        style={{ display: 'block', width: '100%', height: 'auto', touchAction: 'none' }}
+                        onPointerDown={(e) => {
+                          if (tableEditorBusy) return;
+                          if (e.button != null && e.button !== 0) return;
+                          const pt = adminLayoutClientToSvg(e.clientX, e.clientY);
+                          if (!pt) return;
+                          if (adminLayoutTool !== 'pan') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (adminLayoutTool !== 'select') addDecorAtPoint(pt);
+                            return;
+                          }
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          const zoom = adminLayoutViewBox.z;
+                          const startPt = pt;
+                          const startPan = { x: adminLayoutViewBox.x, y: adminLayoutViewBox.y };
+
+                          const moveHandler = (ev) => {
+                            const p = adminLayoutClientToSvg(ev.clientX, ev.clientY);
+                            if (!p) return;
+                            const dx = p.x - startPt.x;
+                            const dy = p.y - startPt.y;
+                            setAdminLayoutPan(adminLayoutClampPan({ x: startPan.x - dx, y: startPan.y - dy }, zoom));
+                          };
+
+                          const upHandler = () => {
+                            const pan = adminLayoutPanDragRef.current;
+                            adminLayoutPanDragRef.current = null;
+                            if (pan?.moveHandler) window.removeEventListener('pointermove', pan.moveHandler);
+                            if (pan?.upHandler) window.removeEventListener('pointerup', pan.upHandler);
+                          };
+
+                          adminLayoutPanDragRef.current = { moveHandler, upHandler };
+                          window.addEventListener('pointermove', moveHandler);
+                          window.addEventListener('pointerup', upHandler);
+                        }}
+                        onWheel={(e) => {
+                          if (!e.ctrlKey && !e.metaKey) return;
+                          if (tableEditorBusy) return;
+                          const pt = adminLayoutClientToSvg(e.clientX, e.clientY);
+                          if (!pt) return;
+                          e.preventDefault();
+                          const factor = Math.exp((-Number(e.deltaY) || 0) / 250);
+                          adminLayoutZoomAt(pt, adminLayoutZoom * factor);
+                        }}
+                      >
+                        <defs>
+                          <linearGradient id="adm-floor" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stopColor="rgba(255,255,255,0.06)" />
+                            <stop offset="1" stopColor="rgba(201,169,110,0.04)" />
+                          </linearGradient>
+                          <filter id="adm-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.28"/>
+                          </filter>
+                          <filter id="adm-glow" x="-60%" y="-60%" width="220%" height="220%">
+                            <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="rgba(201,169,110,0.6)" floodOpacity="1" />
+                          </filter>
+                        </defs>
+                        <rect x="0" y="0" width={ADMIN_LAYOUT_W} height={ADMIN_LAYOUT_H} fill="rgba(0,0,0,0.16)" />
+                        {Array.from({ length: 24 }).map((_, idx) => (
+                          <line key={`grid-v-${idx}`} x1={idx * 40} y1="0" x2={idx * 40} y2={ADMIN_LAYOUT_H} stroke="rgba(255,255,255,0.035)" strokeWidth="1" />
+                        ))}
+                        {Array.from({ length: 16 }).map((_, idx) => (
+                          <line key={`grid-h-${idx}`} x1="0" y1={idx * 40} x2={ADMIN_LAYOUT_W} y2={idx * 40} stroke="rgba(255,255,255,0.035)" strokeWidth="1" />
+                        ))}
+                        <rect x={10 * ADMIN_LAYOUT_SCALE} y={10 * ADMIN_LAYOUT_SCALE} width={460 * ADMIN_LAYOUT_SCALE} height={300 * ADMIN_LAYOUT_SCALE} rx={18 * ADMIN_LAYOUT_SCALE} fill="url(#adm-floor)" stroke="rgba(255,255,255,0.07)" />
+                        
+                        {/* ВХОД text with background */}
+                        <rect x={20 * ADMIN_LAYOUT_SCALE} y={36 * ADMIN_LAYOUT_SCALE} width={58 * ADMIN_LAYOUT_SCALE} height={20 * ADMIN_LAYOUT_SCALE} rx={4 * ADMIN_LAYOUT_SCALE} fill="rgba(201,169,110,0.15)" stroke="rgba(201,169,110,0.35)" strokeWidth="1" />
+                        <text x={28 * ADMIN_LAYOUT_SCALE} y={48 * ADMIN_LAYOUT_SCALE} fill="rgba(201,169,110,0.85)" fontSize="11" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial" fontWeight="600" letterSpacing="2">ВХОД</text>
+                        
+                        {/* ОКНА text with background */}
+                        <rect x={380 * ADMIN_LAYOUT_SCALE} y={36 * ADMIN_LAYOUT_SCALE} width={52 * ADMIN_LAYOUT_SCALE} height={18 * ADMIN_LAYOUT_SCALE} rx={4 * ADMIN_LAYOUT_SCALE} fill="rgba(136,191,255,0.12)" stroke="rgba(136,191,255,0.30)" strokeWidth="1" />
+                        <text x={388 * ADMIN_LAYOUT_SCALE} y={48 * ADMIN_LAYOUT_SCALE} fill="rgba(136,191,255,0.80)" fontSize="10" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial" fontWeight="600" letterSpacing="2">ОКНА</text>
+                        
+                        {/* КУХНЯ text with background */}
+                        <rect x={364 * ADMIN_LAYOUT_SCALE} y={224 * ADMIN_LAYOUT_SCALE} width={60 * ADMIN_LAYOUT_SCALE} height={18 * ADMIN_LAYOUT_SCALE} rx={4 * ADMIN_LAYOUT_SCALE} fill="rgba(192,110,100,0.12)" stroke="rgba(192,110,100,0.30)" strokeWidth="1" />
+                        <text x={372 * ADMIN_LAYOUT_SCALE} y={236 * ADMIN_LAYOUT_SCALE} fill="rgba(192,110,100,0.80)" fontSize="10" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial" fontWeight="600" letterSpacing="2">КУХНЯ</text>
+                        
+                        <rect x={18 * ADMIN_LAYOUT_SCALE} y={238 * ADMIN_LAYOUT_SCALE} width={444 * ADMIN_LAYOUT_SCALE} height={64 * ADMIN_LAYOUT_SCALE} rx={16 * ADMIN_LAYOUT_SCALE} fill="rgba(0,0,0,0.20)" stroke="rgba(255,255,255,0.06)" />
+                        <text x={32 * ADMIN_LAYOUT_SCALE} y={265 * ADMIN_LAYOUT_SCALE} fill="rgba(242,237,230,0.38)" fontSize="10" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial" letterSpacing="2">BAR</text>
+
+                        {adminLayoutDecor.map((item) => {
+                          const selectedDecor = adminLayoutSelectedDecorId === item.id;
+                          const startDecorDrag = (e) => {
+                            if (adminLayoutTool !== 'select') return;
+                            const pt = adminLayoutClientToSvg(e.clientX, e.clientY);
+                            if (!pt) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setAdminLayoutSelectedDecorId(item.id);
+                            setAdminLayoutSelectedId(null);
+                            const moveHandler = (ev) => {
+                              const nextPt = adminLayoutClientToSvg(ev.clientX, ev.clientY);
+                              const drag = adminLayoutDecorDragRef.current;
+                              if (!nextPt || !drag) return;
+                              const dx = nextPt.x - drag.start.x;
+                              const dy = nextPt.y - drag.start.y;
+                              setAdminLayoutDecor((prev) => prev.map((entry) => (
+                                entry.id === drag.id ? moveDecorBy(drag.base, dx, dy) : entry
+                              )));
+                            };
+                            const upHandler = () => {
+                              const drag = adminLayoutDecorDragRef.current;
+                              adminLayoutDecorDragRef.current = null;
+                              if (drag?.moveHandler) window.removeEventListener('pointermove', drag.moveHandler);
+                              if (drag?.upHandler) window.removeEventListener('pointerup', drag.upHandler);
+                            };
+                            adminLayoutDecorDragRef.current = { id: item.id, base: item, start: pt, moveHandler, upHandler };
+                            window.addEventListener('pointermove', moveHandler);
+                            window.addEventListener('pointerup', upHandler);
+                          };
+
+                          if (item.type === 'wall') {
+                            const centerX = (item.x1 + item.x2) / 2;
+                            const centerY = (item.y1 + item.y2) / 2;
+                            const rotation = Number(item.rotation || 0);
+                            return (
+                              <line
+                                key={item.id}
+                                x1={item.x1}
+                                y1={item.y1}
+                                x2={item.x2}
+                                y2={item.y2}
+                                stroke={selectedDecor ? 'rgba(255,255,255,0.98)' : (item.color || 'rgba(201,169,110,0.88)')}
+                                strokeWidth={selectedDecor ? 10 : 8}
+                                strokeLinecap="round"
+                                onPointerDown={startDecorDrag}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setAdminLayoutSelectedDecorId(item.id);
+                                  setAdminLayoutContextMenu({
+                                    decorId: item.id,
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  });
+                                }}
+                                style={{
+                                  cursor: adminLayoutTool === 'select' ? 'move' : 'default',
+                                  transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                                  transformOrigin: `${centerX}px ${centerY}px`,
+                                }}
+                              />
+                            );
+                          }
+                          if (item.type === 'window') {
+                            const rotation = Number(item.rotation || 0);
+                            const centerX = (item.x1 + item.x2) / 2;
+                            const centerY = (item.y1 + item.y2) / 2;
+                            return (
+                              <line
+                                key={item.id}
+                                x1={item.x1}
+                                y1={item.y1}
+                                x2={item.x2}
+                                y2={item.y2}
+                                stroke={selectedDecor ? '#ffffff' : (item.color || 'rgba(136,191,255,0.92)')}
+                                strokeWidth={selectedDecor ? 8 : 6}
+                                strokeLinecap="round"
+                                strokeDasharray="10 8"
+                                onPointerDown={startDecorDrag}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setAdminLayoutSelectedDecorId(item.id);
+                                  setAdminLayoutContextMenu({
+                                    decorId: item.id,
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  });
+                                }}
+                                style={{
+                                  cursor: adminLayoutTool === 'select' ? 'move' : 'default',
+                                  transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                                  transformOrigin: `${centerX}px ${centerY}px`,
+                                }}
+                              />
+                            );
+                          }
+                          if (item.type === 'door') {
+                            const r = Math.hypot((item.x2 - item.x1), (item.y2 - item.y1));
+                            const rotation = Number(item.rotation || 0);
+                            const centerX = (item.x1 + item.x2) / 2;
+                            const centerY = (item.y1 + item.y2) / 2;
+                            return (
+                              <g 
+                                key={item.id} 
+                                onPointerDown={startDecorDrag}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setAdminLayoutSelectedDecorId(item.id);
+                                  setAdminLayoutContextMenu({
+                                    decorId: item.id,
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  });
+                                }}
+                                style={{
+                                  cursor: adminLayoutTool === 'select' ? 'move' : 'default',
+                                  transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                                  transformOrigin: `${centerX}px ${centerY}px`,
+                                }}
+                              >
+                                <line x1={item.x1} y1={item.y1} x2={item.x2} y2={item.y2} stroke={selectedDecor ? '#fff' : 'rgba(201,169,110,0.88)'} strokeWidth={selectedDecor ? 5 : 4} strokeLinecap="round" />
+                                <path d={`M ${item.x1} ${item.y1} A ${r} ${r} 0 0 1 ${item.x2} ${item.y2}`} fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2" />
+                              </g>
+                            );
+                          }
+                          if (item.type === 'zone') {
+                            const rotation = Number(item.rotation || 0);
+                            const centerX = item.x + item.w / 2;
+                            const centerY = item.y + item.h / 2;
+                            return (
+                              <g 
+                                key={item.id} 
+                                onPointerDown={startDecorDrag}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setAdminLayoutSelectedDecorId(item.id);
+                                  setAdminLayoutContextMenu({
+                                    decorId: item.id,
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  });
+                                }}
+                                style={{
+                                  cursor: adminLayoutTool === 'select' ? 'move' : 'default',
+                                  transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                                  transformOrigin: `${centerX}px ${centerY}px`,
+                                }}
+                              >
+                                <rect x={item.x} y={item.y} width={item.w} height={item.h} rx="16" fill="rgba(201,169,110,0.08)" stroke={selectedDecor ? '#fff' : 'rgba(201,169,110,0.42)'} strokeWidth={selectedDecor ? 3 : 2} strokeDasharray="10 6" />
+                                <text x={item.x + (item.w / 2)} y={item.y + (item.h / 2)} textAnchor="middle" fill="rgba(242,237,230,0.88)" fontSize="16" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial">{item.text || 'Зона'}</text>
+                              </g>
+                            );
+                          }
+                          if (item.type === 'text') {
+                            const rotation = Number(item.rotation || 0);
+                            return (
+                              <text
+                                key={item.id}
+                                x={item.x}
+                                y={item.y}
+                                textAnchor="middle"
+                                fill={selectedDecor ? '#ffffff' : 'rgba(242,237,230,0.76)'}
+                                fontSize="18"
+                                fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+                                onPointerDown={startDecorDrag}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setAdminLayoutSelectedDecorId(item.id);
+                                  setAdminLayoutContextMenu({
+                                    decorId: item.id,
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  });
+                                }}
+                                style={{
+                                  cursor: adminLayoutTool === 'select' ? 'move' : 'default',
+                                  userSelect: 'none',
+                                  transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                                  transformOrigin: `${item.x}px ${item.y}px`,
+                                }}
+                              >
+                                {item.text || 'Текст'}
+                              </text>
+                            );
+                          }
+                          return null;
+                        })}
+
+                        {adminLayoutPlacements.map(({ tbl, x, y, i }) => {
+                          const isBlocked = Boolean(tbl?.is_blocked);
+                          const num = String(tbl?.name || '').match(/(\d+)/);
+                          const label = num ? String(num[1]) : String(tbl?.id || '');
+                          const kind = String(tbl?.kind || '').trim().toLowerCase() || 'standard';
+                          const scale = Math.max(0.7, Math.min(1.6, Number(tbl?.scale) || 1));
+                          const seats = Math.max(1, Number(tbl?.seats || 2));
+                          const bar = kind === 'bar';
+                          const round = kind === 'round';
+                          const booth = kind === 'booth';
+                          const w = (bar ? 30 : seats >= 4 ? 64 : 56) * scale;
+                          const h = (bar ? 30 : seats >= 4 ? 40 : 36) * scale;
+                          const busy = adminLayoutDraggingId === tbl.id;
+                          const selected = adminLayoutSelectedId === tbl.id;
+                          const floor = { x: 10 * ADMIN_LAYOUT_SCALE, y: 10 * ADMIN_LAYOUT_SCALE, w: 460 * ADMIN_LAYOUT_SCALE, h: 300 * ADMIN_LAYOUT_SCALE };
+                          const mX = w / 2 + 14;
+                          const mY = h / 2 + 14;
+                          const clampVal = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
+                          const cx = clampVal(x, floor.x + mX, floor.x + floor.w - mX);
+                          const cy = clampVal(y, floor.y + mY, floor.y + floor.h - mY);
+                          return (
+                            <g
+                              key={tbl.id}
+                              transform={`translate(${cx}, ${cy})`}
+                              filter={selected ? 'url(#adm-glow)' : 'url(#adm-shadow)'}
+                              style={{ cursor: 'grab', opacity: isBlocked ? 0.55 : 1 }}
+                              onClick={(e) => { e.stopPropagation(); }}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setAdminLayoutSelectedId(tbl.id);
+                                setAdminLayoutContextMenu({
+                                  tableId: tbl.id,
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                });
+                              }}
+                              onPointerDown={(e) => {
+                                if (!adminId || !tbl?.id) return;
+                                if (adminLayoutTool !== 'pan' && adminLayoutTool !== 'select') return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setAdminLayoutSelectedDecorId(null);
+
+                                const pt = adminLayoutClientToSvg(e.clientX, e.clientY);
+                                if (!pt) return;
+
+                                const params = adminLayoutParams;
+                                const rawFromDisplay = (displayX, displayY) => {
+                                  const s = ADMIN_LAYOUT_SCALE;
+                                  const dx0 = displayX / s;
+                                  const dy0 = displayY / s;
+                                  const { baseCx, baseCy, sin, cos, shiftX, shiftY } = params;
+                                  const cx2 = 240;
+                                  const cy2 = 160;
+                                  const gapScaleX = 1.28;
+                                  const gapScaleY = 1.38;
+                                  const x1 = dx0 - shiftX;
+                                  const y1 = dy0 - shiftY;
+                                  const dx1 = x1 - baseCx;
+                                  const dy1 = y1 - baseCy;
+                                  const dx = dx1 * cos + dy1 * sin;
+                                  const dy = -dx1 * sin + dy1 * cos;
+                                  const xScaled = baseCx + dx;
+                                  const yScaled = baseCy + dy;
+                                  const rawX = (xScaled - cx2) / gapScaleX + cx2;
+                                  const rawY = (yScaled - cy2) / gapScaleY + cy2;
+                                  return { x: Math.round(rawX), y: Math.round(rawY) };
+                                };
+
+                                const prevX = Number.isFinite(Number(tbl.x)) ? Number(tbl.x) : rawFromDisplay(cx, cy).x;
+                                const prevY = Number.isFinite(Number(tbl.y)) ? Number(tbl.y) : rawFromDisplay(cx, cy).y;
+
+                                const flr = { x: 10 * ADMIN_LAYOUT_SCALE, y: 10 * ADMIN_LAYOUT_SCALE, w: 460 * ADMIN_LAYOUT_SCALE, h: 300 * ADMIN_LAYOUT_SCALE };
+                                const clamp2 = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
+
+                                const offX = pt.x - cx;
+                                const offY = pt.y - cy;
+
+                                // Snap-to-grid utility function
+                                const GRID_SIZE = 20;
+                                const snapToGrid = (val) => Math.round(val / GRID_SIZE) * GRID_SIZE;
+
+                                const moveHandler = (ev) => {
+                                  const drag = adminLayoutDragRef.current;
+                                  if (!drag) return;
+                                  const p = adminLayoutClientToSvg(ev.clientX, ev.clientY);
+                                  if (!p) return;
+                                  let nx = p.x - drag.offX;
+                                  let ny = p.y - drag.offY;
+                                  nx = clamp2(nx, flr.x + 20 * ADMIN_LAYOUT_SCALE, flr.x + flr.w - 20 * ADMIN_LAYOUT_SCALE);
+                                  ny = clamp2(ny, flr.y + 20 * ADMIN_LAYOUT_SCALE, flr.y + flr.h - 20 * ADMIN_LAYOUT_SCALE);
+                                  const raw = rawFromDisplay(nx, ny);
+                                  // Apply snap-to-grid
+                                  raw.x = snapToGrid(raw.x);
+                                  raw.y = snapToGrid(raw.y);
+                                  drag.lastRaw = raw;
+                                  drag.didMove = true;
+                                  setAdminTables((prev) => prev.map((t) => (t.id === drag.tableId ? { ...t, x: raw.x, y: raw.y } : t)));
+                                };
+
+                                const upHandler = async () => {
+                                  const drag = adminLayoutDragRef.current;
+                                  if (!drag) return;
+                                  adminLayoutDragRef.current = null;
+                                  setAdminLayoutDraggingId(null);
+                                  window.removeEventListener('pointermove', moveHandler);
+                                  window.removeEventListener('pointerup', upHandler);
+
+                                  if (!drag.didMove) {
+                                    setAdminLayoutSelectedId(prev => prev === drag.tableId ? null : drag.tableId);
+                                    return;
+                                  }
+
+                                  const raw = drag.lastRaw || { x: prevX, y: prevY };
+                                  try {
+                                    await api.admin.tables.setLayout(adminId, drag.tableId, raw.x, raw.y);
+                                    toast?.ok?.(t('admin_layout_saved'));
+                                  } catch (err) {
+                                    toast?.err?.(err?.message || t('admin_layout_save_failed'));
+                                    setAdminTables((prev) => prev.map((t) => (t.id === drag.tableId ? { ...t, x: prevX, y: prevY } : t)));
+                                  }
+                                };
+
+                                adminLayoutDragRef.current = {
+                                  tableId: tbl.id,
+                                  offX,
+                                  offY,
+                                  prevX,
+                                  prevY,
+                                  didMove: false,
+                                  lastRaw: { x: prevX, y: prevY },
+                                  moveHandler,
+                                  upHandler,
+                                };
+                                setAdminLayoutDraggingId(tbl.id);
+                                window.addEventListener('pointermove', moveHandler);
+                                window.addEventListener('pointerup', upHandler);
+                              }}
+                            >
+                              <rect
+                                x={-w / 2}
+                                y={-h / 2}
+                                width={w}
+                                height={h}
+                                rx={round ? Math.min(w, h) / 2 : booth ? 14 : 10}
+                                fill={busy ? 'rgba(201,169,110,0.75)' : selected ? 'rgba(201,169,110,0.22)' : isBlocked ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.35)'}
+                                stroke={busy || selected ? 'rgba(232,202,144,0.95)' : 'rgba(255,255,255,0.12)'}
+                                strokeWidth={selected ? 2 : 1}
+                              />
+                              <text
+                                x="0"
+                                y="4"
+                                textAnchor="middle"
+                                fill={busy ? '#0b0b0b' : 'rgba(242,237,230,0.92)'}
+                                fontSize="11"
+                                fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+                                style={{ userSelect: 'none' }}
+                              >
+                                {label}
+                              </text>
+                              {selected && (
+                                <g
+                                  transform={`translate(${w / 2 + 2}, ${-h / 2 - 2})`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAdminLayoutSelectedId(null);
+                                    deleteTable(tbl);
+                                  }}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <circle cx="0" cy="0" r="8" fill="rgba(192,71,59,0.92)" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+                                  <path d="M-3.5 -3.5l7 7M3.5 -3.5l-7 7" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                                </g>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                      {/* Zoom Controls Overlay - Bottom Right */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: 12,
+                        right: 12,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        background: 'rgba(15,15,16,0.85)',
+                        padding: '8px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        backdropFilter: 'blur(8px)',
+                      }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ fontSize: 12, padding: '4px 8px', minWidth: 0 }}
+                          onClick={() => adminLayoutSetZoom(Math.max(ADMIN_LAYOUT_MIN_ZOOM, adminLayoutZoom - 0.15))}
+                          disabled={tableEditorBusy}
+                          title="Zoom out"
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            fontSize: 11,
+                            padding: '4px 8px',
+                            minWidth: 40,
+                            textAlign: 'center',
+                            background: 'rgba(201,169,110,0.10)',
+                            border: '1px solid rgba(201,169,110,0.35)',
+                            borderRadius: 6,
+                            color: 'var(--gold)',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                          }}
+                          onClick={() => { setAdminLayoutPan({ x: 0, y: 0 }); setAdminLayoutZoom(1); }}
+                          disabled={tableEditorBusy}
+                          title="Reset zoom to 100%"
+                        >
+                          {Math.round(adminLayoutZoom * 100)}%
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ fontSize: 12, padding: '4px 8px', minWidth: 0 }}
+                          onClick={() => adminLayoutSetZoom(Math.min(ADMIN_LAYOUT_MAX_ZOOM, adminLayoutZoom + 0.15))}
+                          disabled={tableEditorBusy}
+                          title="Zoom in"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {/* Context Menu */}
+                      {adminLayoutContextMenu && (
+                        <div
+                          style={{
+                            position: 'fixed',
+                            left: adminLayoutContextMenu.x,
+                            top: adminLayoutContextMenu.y,
+                            background: 'rgba(20,20,22,0.95)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: 10,
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.50)',
+                            backdropFilter: 'blur(12px)',
+                            zIndex: 10000,
+                            minWidth: 180,
+                            overflow: 'hidden',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Table Context Menu */}
+                          {adminLayoutContextMenu.tableId && (() => {
+                            const tbl = adminTables.find(t => t.id === adminLayoutContextMenu.tableId);
+                            if (!tbl) return null;
+                            return (
+                              <>
+                                <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'var(--muted)' }}>
+                                  {tbl.name || `Столик #${tbl.id}`}
+                                </div>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'var(--text)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(201,169,110,0.10)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    duplicateTable(tbl);
+                                  }}
+                                >
+                                  📋 Дублировать
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'var(--text)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(201,169,110,0.10)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    openEditTable(tbl);
+                                    setAdminLayoutContextMenu(null);
+                                  }}
+                                >
+                                  ✎ Редактировать
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'rgba(220,80,70,0.9)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(220,80,70,0.12)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    deleteTable(tbl);
+                                    setAdminLayoutContextMenu(null);
+                                  }}
+                                >
+                                  🗑 Удалить
+                                </button>
+                              </>
+                            );
+                          })()}
+
+                          {/* Decoration Context Menu */}
+                          {adminLayoutContextMenu.decorId && (() => {
+                            const decor = adminLayoutDecor.find(d => d.id === adminLayoutContextMenu.decorId);
+                            if (!decor) return null;
+                            return (
+                              <>
+                                <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'var(--muted)' }}>
+                                  {decor.type === 'wall' ? 'Стена' : decor.type === 'door' ? 'Дверь' : decor.type === 'window' ? 'Окно' : decor.type === 'zone' ? 'Зона' : 'Текст'}
+                                </div>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'var(--text)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(201,169,110,0.10)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    rotateDecor(decor.id, 15);
+                                  }}
+                                >
+                                  🔄 Повернуть 15°
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'var(--text)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(201,169,110,0.10)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    rotateDecor(decor.id, -15);
+                                  }}
+                                >
+                                  ↶ Повернуть -15°
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'var(--text)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(201,169,110,0.10)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    setAdminLayoutDecor((prev) => prev.map((item) => (item.id === decor.id ? { ...item, rotation: 0 } : item)));
+                                  }}
+                                >
+                                  ⊙ Сбросить угол
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'rgba(220,80,70,0.9)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = 'rgba(220,80,70,0.12)'}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => {
+                                    setAdminLayoutDecor((prev) => prev.filter((item) => item.id !== decor.id));
+                                    setAdminLayoutSelectedDecorId(null);
+                                    setAdminLayoutContextMenu(null);
+                                  }}
+                                >
+                                  🗑 Удалить
+                                </button>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {adminTablesRestaurantId && !adminTablesLoading && adminTables.length === 0 && (
+                  <div className="admin-empty-state" style={{ marginTop: 12 }}>
+                    <div className="admin-stub-h" style={{ marginBottom: 6 }}>Здесь будет ваш зал</div>
+                    <div className="admin-muted">Добавьте первый столик, и план начнёт оживать.</div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -992,7 +2925,12 @@ export function AdminModal({ onClose, toast }) {
                 </div>
                 <div className="admin-panel-scroll">
                   {menuLoading && <div className="admin-muted">{t('loading')}</div>}
-                  {!menuLoading && menuItems.length === 0 && <div className="admin-muted">{t('admin_menu_empty')}</div>}
+                  {!menuLoading && menuItems.length === 0 && (
+                    <div className="admin-empty-state">
+                      <div className="admin-stub-h" style={{ marginBottom: 6 }}>Меню пока пустое</div>
+                      <div className="admin-muted">Добавьте первое блюдо и загрузите фотографию прямо сюда перетаскиванием.</div>
+                    </div>
+                  )}
                   {menuItems.map((it) => (
                     <div key={it.id} className="admin-row">
                       <div className="admin-row-main">
@@ -1048,6 +2986,39 @@ export function AdminModal({ onClose, toast }) {
                   <div className="fg">
                     <div className="fl">{t('admin_field_image')}</div>
                     <input className="fi" type="text" value={menuForm.img} onChange={(e) => setMenuForm((p) => ({ ...p, img: e.target.value }))} placeholder={t('admin_ph_url')} />
+                  </div>
+                  <input
+                    ref={menuUploadInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleMenuImageUpload(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  <div
+                    className={`admin-upload-drop${menuUploading ? ' busy' : ''}`}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer?.files?.[0];
+                      if (file) handleMenuImageUpload(file);
+                    }}
+                    onClick={() => menuUploadInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        menuUploadInputRef.current?.click();
+                      }
+                    }}
+                  >
+                    <Icons.Image />
+                    <strong>{menuUploading ? 'Загружаю фото…' : 'Перетащите фото сюда'}</strong>
+                    <span>или нажмите, чтобы выбрать из проводника</span>
                   </div>
                   <div className="fg">
                     <div className="fl">{t('admin_field_desc')}</div>
@@ -1163,8 +3134,8 @@ export function AdminModal({ onClose, toast }) {
                       <option value="orders_total_desc">{t('admin_stats_sort_total')}</option>
                       <option value="name_asc">{t('admin_stats_sort_name')}</option>
                     </select>
-                    <button type="button" className="btn btn-ghost" onClick={resetStatsDemo} title={t('admin_stats_reset')}>
-                      <Icons.Trash /> {t('admin_stats_reset')}
+                    <button type="button" className="btn btn-ghost" onClick={loadAdminOrders} disabled={adminOrdersLoading}>
+                      <Icons.Refresh /> {t('refresh')}
                     </button>
                     <button type="button" className="btn btn-ghost" onClick={loadMenu} disabled={menuLoading}>
                       <Icons.Refresh /> {t('refresh')}
@@ -1173,6 +3144,7 @@ export function AdminModal({ onClose, toast }) {
                 </div>
 
                 <div className="admin-panel-scroll">
+                  {adminOrdersLoading && <div className="admin-muted">{t('loading')}</div>}
                   {menuLoading && <div className="admin-muted">{t('loading')}</div>}
                   {!menuLoading && statsRows.length === 0 && <div className="admin-muted">{t('admin_menu_empty')}</div>}
                   {!menuLoading && statsRows.length > 0 && statsFilteredSorted.length === 0 && <div className="admin-muted">{t('admin_stats_no_match')}</div>}
@@ -1193,7 +3165,7 @@ export function AdminModal({ onClose, toast }) {
                             {it.name}
                             {!it.is_active && <span className="admin-row-off">{t('admin_off')}</span>}
                             {curDisc > 0 && <span className="admin-disc-pill">-{curDisc}%</span>}
-                            {r.startsInMs > 0 && <span className="admin-new-pill">{t('admin_stats_starts_in', { time: fmtDuration(r.startsInMs) })}</span>}
+                            {r.ageH > 0 && r.ageH < 24 && <span className="admin-new-pill">{t('admin_stats_warming_up')}</span>}
                           </div>
                           <div className="admin-row-sub">
                             {it.cat} · {t('admin_stats_total_short', { count: r.totalOrders })} · {t('admin_stats_24h_short', { count: r.orders24h })} ({deltaTxt})
@@ -1298,7 +3270,7 @@ export function AdminModal({ onClose, toast }) {
                       <div key={r.it.id} className="admin-suggest-row">
                         <div className="admin-suggest-name">{r.it.name}</div>
                         <div className="admin-suggest-pill">
-                          {r.startsInMs > 0 ? t('admin_stats_starts_in', { time: fmtDuration(r.startsInMs) }) : t('admin_stats_warming_up')}
+                          {t('admin_stats_warming_up')}
                         </div>
                       </div>
                     ))}
@@ -1381,6 +3353,211 @@ export function AdminModal({ onClose, toast }) {
                 </div>
               </div>
             </div>
+          )}
+
+          {tab === 'reviews' && (
+            <div className="admin-split" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="admin-panel" style={{ flex: 1 }}>
+                <div className="admin-panel-h">
+                  <div className="admin-panel-title">{t('admin_tab_reviews')}</div>
+                  <button type="button" className="btn btn-ghost" onClick={loadReviews}>
+                    <Icons.Refresh /> {t('refresh')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setAdminHideOldReviews((v) => !v)}
+                    title={adminHideOldReviews ? t('admin_show_all') : t('admin_hide_old_reviews')}
+                  >
+                    <Icons.Clock /> {adminHideOldReviews ? t('admin_show_all') : t('admin_hide_old')}
+                  </button>
+                </div>
+                <div className="admin-panel-scroll">
+                  {reviewsLoading && <div className="admin-muted">{t('loading')}</div>}
+                  {!reviewsLoading && reviewsFiltered.length === 0 && <div className="admin-muted">{t('admin_reviews_empty')}</div>}
+                  {reviewsFiltered.map((rv) => (
+                    <div key={rv.id} className="admin-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                        <div>
+                          <div className="admin-row-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {rv.author_name}
+                            <span style={{ color: 'var(--gold)', fontSize: 13 }}>{'★'.repeat(rv.rating)}{'☆'.repeat(5 - rv.rating)}</span>
+                            {rv.is_featured && <span className="admin-pro"><Icons.Bookmark /> {t('admin_reviews_featured_badge')}</span>}
+                          </div>
+                          <div className="admin-row-sub" style={{ marginTop: 4 }}>{rv.text}</div>
+                          {rv.admin_reply && (
+                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--gold)', fontStyle: 'italic' }}>
+                              {t('review_admin_reply_label')}: {rv.admin_reply}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={reviewUpdatingId === rv.id}
+                            onClick={() => handleReviewFeature(rv.id, rv.is_featured)}
+                            title={rv.is_featured ? t('admin_reviews_unfeature') : t('admin_reviews_feature')}
+                          >
+                            <Icons.Bookmark /> {rv.is_featured ? t('admin_reviews_unfeature') : t('admin_reviews_feature')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={reviewUpdatingId === rv.id}
+                            onClick={() => { setReviewReplyId(rv.id); setReviewReplyDraft(rv.admin_reply || ''); }}
+                          >
+                            <Icons.Reply /> {t('admin_reviews_reply')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline-gold"
+                            disabled={reviewUpdatingId === rv.id}
+                            onClick={() => handleReviewDelete(rv.id)}
+                          >
+                            <Icons.Trash /> {t('admin_delete')}
+                          </button>
+                        </div>
+                      </div>
+                      {reviewReplyId === rv.id && (
+                        <div style={{ width: '100%', display: 'flex', gap: 8 }}>
+                          <input
+                            className="fi"
+                            style={{ flex: 1 }}
+                            type="text"
+                            value={reviewReplyDraft}
+                            onChange={(e) => setReviewReplyDraft(e.target.value)}
+                            placeholder={t('admin_reviews_reply_ph')}
+                            onKeyDown={(e) => e.key === 'Enter' && handleReviewReply(rv.id)}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-gold"
+                            disabled={reviewUpdatingId === rv.id || !reviewReplyDraft.trim()}
+                            onClick={() => handleReviewReply(rv.id)}
+                          >
+                            <Icons.Send /> {t('admin_reviews_reply')}
+                          </button>
+                          <button type="button" className="btn btn-ghost" onClick={() => setReviewReplyId(null)}>
+                            {t('close')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'hero' && (
+            <div className="admin-scroll-panel"><div style={{ padding: '4px 0' }}>
+              <div className="admin-section-title">{t('admin_hero_title')}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 18, lineHeight: 1.5 }}>{t('admin_hero_sub')}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {heroConfig.map((slot, idx) => {
+                  const isCustom = slot.mode === 'custom';
+                  const dish = !isCustom ? heroMenuItems.find(d => Number(d.id) === Number(slot.dishId)) : null;
+                  const previewImg = isCustom ? (slot.customImg || '') : (dish?.img || '');
+                  return (
+                    <div key={idx} style={{ border: '1px solid var(--glass-border)', borderRadius: 'var(--r-md)', padding: '14px 16px', background: 'var(--glass)' }}>
+                      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        {previewImg && (
+                          <img src={previewImg} alt="" style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                        )}
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)' }}>{t('admin_hero_slot', { n: idx + 1 })}</div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button type="button" className={`btn ${!isCustom ? 'btn-gold' : 'btn-ghost'}`} style={{ padding: '5px 12px', fontSize: 10 }} onClick={() => updateHeroSlot(idx, 'mode', 'dish')}>{t('admin_hero_mode_dish')}</button>
+                              <button type="button" className={`btn ${isCustom ? 'btn-gold' : 'btn-ghost'}`} style={{ padding: '5px 12px', fontSize: 10 }} onClick={() => updateHeroSlot(idx, 'mode', 'custom')}>{t('admin_hero_mode_custom')}</button>
+                            </div>
+                          </div>
+
+                          {!isCustom && (
+                            <div className="fg" style={{ marginBottom: 10 }}>
+                              <div className="fl">{t('admin_hero_pick_dish')}</div>
+                              <select className="fi" value={slot.dishId || ''} onChange={e => updateHeroSlot(idx, 'dishId', Number(e.target.value))}>
+                                <option value="">{t('admin_hero_pick_dish')}</option>
+                                {heroMenuItems.map(d => (
+                                  <option key={d.id} value={d.id}>{d.name} — {d.price} ₽</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {isCustom && (
+                            <div className="fg" style={{ marginBottom: 10 }}>
+                              <div className="fl">{t('admin_hero_custom_title')}</div>
+                              <input className="fi" type="text" value={slot.customTitle || ''} onChange={e => updateHeroSlot(idx, 'customTitle', e.target.value)} placeholder={t('admin_hero_custom_title_ph')} />
+                            </div>
+                          )}
+
+                          <div className="fg" style={{ marginBottom: 10 }}>
+                            <div className="fl">{t('admin_hero_title_override')}</div>
+                            <input className="fi" type="text" value={slot.titleOverride || ''} onChange={e => updateHeroSlot(idx, 'titleOverride', e.target.value)} placeholder={isCustom ? (slot.customTitle || t('admin_hero_title_override_ph')) : (dish?.name || t('admin_hero_title_override_ph'))} />
+                          </div>
+
+                          <div className="fg" style={{ marginBottom: 10 }}>
+                            <div className="fl">{t('admin_hero_tag')}</div>
+                            <input className="fi" type="text" value={slot.tag || ''} onChange={e => updateHeroSlot(idx, 'tag', e.target.value)} placeholder={t('admin_hero_tag_ph')} />
+                          </div>
+
+                          <div className="fg" style={{ marginBottom: 10 }}>
+                            <div className="fl">{t('admin_hero_desc')}</div>
+                            <input className="fi" type="text" value={slot.desc || ''} onChange={e => updateHeroSlot(idx, 'desc', e.target.value)} placeholder={t('admin_hero_desc_ph')} />
+                          </div>
+
+                          {isCustom && (
+                            <div className="fg" style={{ marginBottom: 0 }}>
+                              <div className="fl">{t('admin_hero_custom_img')}</div>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <input className="fi" type="text" value={slot.customImg || ''} onChange={e => updateHeroSlot(idx, 'customImg', e.target.value)} placeholder={t('admin_hero_custom_img_ph')} style={{ flex: 1, minWidth: 0 }} />
+                                <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '11px 16px', borderRadius: 'var(--r-xl)', border: '1px solid var(--border2)', background: 'transparent', color: 'var(--muted)', fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                                  <Icons.Image /> {t('admin_hero_upload')}
+                                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const reader = new FileReader();
+                                    reader.onload = ev => updateHeroSlot(idx, 'customImg', ev.target.result);
+                                    reader.readAsDataURL(file);
+                                    e.target.value = '';
+                                  }} />
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 18, paddingBottom: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-gold" onClick={saveHeroConfig} disabled={heroSaved}>
+                  <Icons.Check /> {heroSaved ? t('admin_hero_saved') : t('admin_hero_save')}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={resetHeroConfig}>
+                  <Icons.Refresh /> {t('admin_hero_reset')}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={async () => {
+                  let count = 0;
+                  for (let i = 0; i < SLIDES.length; i++) {
+                    const sl = SLIDES[i];
+                    const url = sl.img || sl.imgLight;
+                    if (!url) continue;
+                    const ext = url.split('.').pop().split('?')[0].substring(0, 4) || 'jpg';
+                    const ok = await downloadImageBlob(url, `slide_${i + 1}.${ext}`);
+                    if (!ok) window.open(url, '_blank');
+                    else count++;
+                    await new Promise(r => setTimeout(r, 400));
+                  }
+                  toast?.ok?.(t('admin_hero_download_done', { count }));
+                }}>
+                  <Icons.Download /> {t('admin_hero_download_all')}
+                </button>
+              </div>
+            </div></div>
           )}
         </div>
       </div>

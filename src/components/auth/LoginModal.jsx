@@ -40,10 +40,11 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
   }, []);
 
   const submit = async () => {
-    if (!name || !pass) return;
+    const nameTrim = name.trim();
+    if (!nameTrim || !pass) return;
     setLoading(true);
     try {
-      const user = await api.auth.login(name, pass);
+      const user = await api.auth.login(nameTrim, pass);
       login(user);
       toast.ok(t('auth_welcome_back', { name: user.name || t('guest') }));
       onClose();
@@ -111,7 +112,14 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
         >
           <div className="fg">
             <div className="fl"><Icons.User />{t('auth_username')}</div>
-            <input className="fi" type="text" placeholder={t('auth_username_ph')} value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              className="fi"
+              type="text"
+              placeholder={t('auth_username_ph')}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="username"
+            />
           </div>
           <div className="fg">
             <div className="fl"><Icons.Lock />{t('auth_password')}</div>
@@ -121,10 +129,11 @@ export function LoginModal({ onClose, onRegister, onForgotPassword, toast }) {
               placeholder={t('auth_password_ph')}
               value={pass}
               onChange={(e) => setPass(e.target.value)}
+              autoComplete="current-password"
             />
           </div>
 
-          <button type="submit" className="submit" disabled={loading || !name || !pass}>
+          <button type="submit" className="submit" disabled={loading || !name.trim() || !pass}>
             {loading ? t('auth_signin_loading') : t('auth_signin_btn')}
           </button>
 

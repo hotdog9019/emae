@@ -10,6 +10,10 @@ import admin
 import support
 import menu
 import events
+import orders
+import admin_orders
+import reviews as reviews_module
+import uploads
 import ai
 from Telegram import router as telegram_official_router
 import models
@@ -83,37 +87,8 @@ def seed_restaurants():
                 ))
                 db.commit()
         
-        # Если рестораны уже есть — не сидим
-        # если рестораны уже есть — убедимся, что для каждого ресторана созданы все столики по макету
+        # If restaurants already exist, keep them; tables are managed via admin panel.
         if db.query(Restaurant).count() > 0:
-            # ensure full layout tables exist for each restaurant
-            base_layout = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,100,101,102,103,104,105,106]
-            rests = db.query(Restaurant).all()
-            for r in rests:
-                for num in base_layout:
-                    name = f"T{num}"
-                    exists = db.query(Table).filter(Table.restaurant_id==r.id, Table.name==name).first()
-                    if not exists:
-                        # compute base coords approximately like seed below
-                        coords = {
-                            1: (70,210),2: (70,170),3: (70,130),4: (70,90),
-                            5: (180,60),6: (300,60),7: (380,90),8: (380,130),9: (380,170),10: (380,210),
-                            11: (300,200),12: (300,140),13: (200,200),14: (200,140),
-                            100: (80,280),101: (140,280),102: (200,280),103: (260,280),104: (320,280),105: (380,280),106: (440,280)
-                        }[num]
-                        x_base, y_base = coords
-                        off_x = (r.id * 7) % 24 - 12
-                        off_y = (r.id * 13) % 18 - 9
-                        seats = 2 if (num >= 100 or num % 3 != 0) else 4
-                        tbl = Table(
-                            restaurant_id=r.id,
-                            name=name,
-                            seats=seats,
-                            x=int(x_base + off_x),
-                            y=int(y_base + off_y)
-                        )
-                        db.add(tbl)
-            db.commit()
             return
 
         addresses = [
@@ -129,33 +104,12 @@ def seed_restaurants():
             "г. Москва, ул. Остоженка, 25"
         ]
 
-        # layout positions roughly matching frontend SVG (base coords)
-        base_layout = {
-            1: (70,210),2: (70,170),3: (70,130),4: (70,90),
-            5: (180,60),6: (300,60),7: (380,90),8: (380,130),9: (380,170),10: (380,210),
-            11: (300,200),12: (300,140),13: (200,200),14: (200,140),
-            100: (80,280),101: (140,280),102: (200,280),103: (260,280),104: (320,280),105: (380,280),106: (440,280)
-        }
+        # Table layout is managed from the admin panel; no default tables are seeded.
 
         for i, addr in enumerate(addresses, start=1):
             r = Restaurant(name=f"Yomayo {i}", address=addr, phone="+7 (495) 111-22-33")
             db.add(r)
             db.flush()
-            # создаём полный набор столиков соответствующий макету (1-14 и 100-106)
-            for num, coords in base_layout.items():
-                x_base, y_base = coords
-                # небольшой уникальный сдвиг координат для каждого ресторана
-                off_x = (i * 7) % 24 - 12
-                off_y = (i * 13) % 18 - 9
-                seats = 2 if (num >= 100 or num % 3 != 0) else 4
-                tbl = Table(
-                    restaurant_id=r.id,
-                    name=f"T{num}",
-                    seats=seats,
-                    x=int(x_base + off_x),
-                    y=int(y_base + off_y)
-                )
-                db.add(tbl)
 
         db.commit()
     finally:
@@ -272,8 +226,18 @@ def migrate_legacy_tables_schema():
         }
         if not cols:
             return
+        changed = False
         if "is_blocked" not in cols:
             db.execute(text("ALTER TABLE tables ADD COLUMN is_blocked BOOLEAN"))
+            changed = True
+        if "kind" not in cols:
+            db.execute(text("ALTER TABLE tables ADD COLUMN kind TEXT"))
+            changed = True
+        if "scale" not in cols:
+            db.execute(text("ALTER TABLE tables ADD COLUMN scale REAL"))
+            changed = True
+
+        if changed:
             db.commit()
             cols = {
                 row[1] for row in db.execute(text("PRAGMA table_info(tables)")).fetchall()
@@ -309,6 +273,24 @@ def migrate_legacy_menu_items_schema():
             db.execute(text("UPDATE menu_items SET discount_percent = COALESCE(discount_percent, 0)"))
 
         db.commit()
+    finally:
+        db.close()
+
+
+def migrate_legacy_orders_schema():
+    db: Session = SessionLocal()
+    try:
+        cols = {
+            row[1] for row in db.execute(text("PRAGMA table_info(orders)")).fetchall()
+        }
+        if not cols:
+            return
+        changed = False
+        if "restaurant_id" not in cols:
+            db.execute(text("ALTER TABLE orders ADD COLUMN restaurant_id INTEGER"))
+            changed = True
+        if changed:
+            db.commit()
     finally:
         db.close()
 
@@ -385,6 +367,7 @@ migrate_legacy_users_schema()
 migrate_legacy_reservations_schema()
 migrate_legacy_tables_schema()
 migrate_legacy_menu_items_schema()
+migrate_legacy_orders_schema()
 
 # Создаем приложение FastAPI
 app = FastAPI(
@@ -454,6 +437,10 @@ app.include_router(support.router)
 app.include_router(ai.router)
 app.include_router(menu.router)
 app.include_router(events.router)
+app.include_router(orders.router)
+app.include_router(admin_orders.router)
+app.include_router(reviews_module.router)
+app.include_router(uploads.router)
 
 # seed restaurants/tables if not present
 seed_restaurants()
@@ -496,9 +483,12 @@ project_root = Path(__file__).resolve().parent.parent
 build_dir = project_root / "build"
 build_static = build_dir / "static"
 build_index = build_dir / "index.html"
+public_photo_dir = project_root / "public" / "photo"
 
 if build_static.exists():
     app.mount("/static", StaticFiles(directory=str(build_static)), name="frontend-static")
+if public_photo_dir.exists():
+    app.mount("/photo", StaticFiles(directory=str(public_photo_dir)), name="photo-static")
 
 
 @app.get("/{full_path:path}")

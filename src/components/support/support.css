@@ -254,3 +254,46 @@
   .sw-mode{flex:1;text-align:center;padding:8px 6px;letter-spacing:1.8px;}
   .sw-close{width:38px;height:38px;}
 }
+
+
+/* Quick action buttons */
+.sw-quick-actions {
+  padding: 8px 14px 6px;
+  border-top: 1px solid var(--border);
+}
+.sw-quick-label {
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.sw-quick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sw-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border2);
+  background: rgba(0,0,0,0.2);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .22s var(--ease);
+  white-space: nowrap;
+}
+.sw-quick-btn svg { color: var(--gold); flex-shrink: 0; }
+.sw-quick-btn:hover {
+  border-color: rgba(201,169,110,0.55);
+  background: rgba(201,169,110,0.09);
+  transform: translateY(-1px);
+  color: var(--text);
+}
+.sw-quick-btn-red { border-color: rgba(192,71,59,0.28); }
+.sw-quick-btn-red svg { color: var(--red); }
+.sw-quick-btn-red:hover { border-color: rgba(192,71,59,0.55); background: rgba(192,71,59,0.08); }

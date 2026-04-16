@@ -17,7 +17,9 @@ export function RegisterModal({ onClose, onLogin, toast }) {
   const upd = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
   const submit = async () => {
-    if (!f.name || !f.pass) {
+    const nameTrim = f.name.trim();
+    const emailTrim = f.email.trim();
+    if (!nameTrim || !f.pass) {
       toast.err(t('auth_required_fields'));
       return;
     }
@@ -36,10 +38,10 @@ export function RegisterModal({ onClose, onLogin, toast }) {
 
     setLoading(true);
     try {
-      const user = await api.auth.register(f.name, f.pass, 1, f.email || undefined);
+      const user = await api.auth.register(nameTrim, f.pass, 1, emailTrim || undefined);
       login(user);
-      if (f.email) {
-        await api.auth.sendEmailCode(user.id, f.email);
+      if (emailTrim) {
+        await api.auth.sendEmailCode(user.id, emailTrim);
         setCodeSent(true);
         toast.ok(t('auth_register_done_email'));
       } else {
@@ -72,19 +74,19 @@ export function RegisterModal({ onClose, onLogin, toast }) {
           >
             <div className="fg">
               <div className="fl"><Icons.User />{t('auth_username')}</div>
-              <input className="fi" type="text" placeholder={t('auth_username_ph')} value={f.name} onChange={upd('name')} />
+              <input className="fi" type="text" placeholder={t('auth_username_ph')} value={f.name} onChange={upd('name')} autoComplete="username" />
             </div>
             <div className="fg">
               <div className="fl">{t('auth_email_optional')}</div>
-              <input className="fi" type="email" placeholder="you@example.com" value={f.email} onChange={upd('email')} />
+              <input className="fi" type="email" placeholder="you@example.com" value={f.email} onChange={upd('email')} autoComplete="email" />
             </div>
             <div className="fg auth-section-spacer">
               <div className="fl"><Icons.Lock />{t('auth_password')}</div>
-              <input className="fi" type="password" placeholder={t('auth_password_min_ph')} value={f.pass} onChange={upd('pass')} />
+              <input className="fi" type="password" placeholder={t('auth_password_min_ph')} value={f.pass} onChange={upd('pass')} autoComplete="new-password" />
             </div>
             <div className="fg">
               <div className="fl"><Icons.Lock />{t('auth_password_repeat')}</div>
-              <input className="fi" type="password" placeholder={t('auth_password_repeat_ph')} value={f.pass2} onChange={upd('pass2')} />
+              <input className="fi" type="password" placeholder={t('auth_password_repeat_ph')} value={f.pass2} onChange={upd('pass2')} autoComplete="new-password" />
             </div>
             <div className="f-check">
               <input type="checkbox" id="ag" checked={f.agree} onChange={upd('agree')} />
@@ -107,7 +109,7 @@ export function RegisterModal({ onClose, onLogin, toast }) {
                 </button>
               </label>
             </div>
-            <button type="submit" className="submit" disabled={loading || !f.name || !f.pass || !f.agree}>
+            <button type="submit" className="submit" disabled={loading || !f.name.trim() || !f.pass || !f.agree}>
               {loading ? t('auth_register_loading') : t('auth_register_btn')}
             </button>
             {codeSent && <p className="auth-note">{t('auth_verify_email_hint')}</p>}

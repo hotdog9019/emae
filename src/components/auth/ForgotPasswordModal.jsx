@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Icons } from '../icons/Icons';
 import { fmtPhone } from '../../utils/helpers';
 import { useI18n } from '../../hooks/useI18n';
@@ -14,14 +14,23 @@ export function ForgotPasswordModal({ onClose, onBackToLogin, toast }) {
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(intervalRef.current);
+    };
+  }, []);
 
   const startTimer = () => {
     setTimer(60);
     setCanResend(false);
-    const interval = setInterval(() => {
+    clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
       setTimer((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
           setCanResend(true);
           return 0;
         }

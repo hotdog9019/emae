@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../hooks/useI18n';
 import { Icons } from '../icons/Icons';
 import { ProModal } from './ProModal';
 import { AdminModal } from '../admin/AdminModal';
+import { readJsonStorageWithLegacy } from '../../utils/brand';
 
 export function ProfileModal({ onClose, toast }) {
   const { user, login } = useAuth();
@@ -13,11 +14,17 @@ export function ProfileModal({ onClose, toast }) {
   const [saving, setSaving] = useState(false);
   const [emailCode, setEmailCode] = useState('');
   const [profile, setProfile] = useState(null);
+  const userRef = useRef(user);
+  const toastRef = useRef(toast);
   const [vkClientId, setVkClientId] = useState('');
   const [proOpen, setProOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [reservations, setReservations] = useState([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [historyTab, setHistoryTab] = useState('reservations');
   const [form, setForm] = useState({
     name: '',
     full_name: '',
@@ -25,6 +32,14 @@ export function ProfileModal({ onClose, toast }) {
     birth_date: '',
     email: '',
   });
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,8 +72,21 @@ export function ProfileModal({ onClose, toast }) {
           birth_date: p.birth_date || '',
           email: p.email || '',
         });
+        // Mirror commonly used profile fields into the auth user object
+        // so other flows (e.g. reservation) can autofill without refetching.
+        const baseUser = userRef.current || {};
+        login({
+          ...baseUser,
+          name: p.name || baseUser.name,
+          full_name: p.full_name || baseUser.full_name,
+          phone: p.phone || baseUser.phone,
+          birth_date: p.birth_date || baseUser.birth_date,
+          email: p.email || baseUser.email,
+          avatar_url: p.telegram_photo_url || p.vk_avatar_url || baseUser.avatar_url,
+          is_pro: Boolean(p.is_pro ?? baseUser.is_pro),
+        });
       } catch (e) {
-        if (!cancelled) toast.err(e.message || t('profile_load_failed'));
+        if (!cancelled) toastRef.current?.err?.(e.message || t('profile_load_failed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -66,7 +94,7 @@ export function ProfileModal({ onClose, toast }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, t, toast]);
+  }, [user?.id, t, login]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -87,6 +115,32 @@ export function ProfileModal({ onClose, toast }) {
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      setReservationsLoading(true);
+      try {
+        const list = await api.reservations.getUserReservations(user.id);
+        if (!cancelled) setReservations(Array.isArray(list) ? list : []);
+      } catch {
+        if (!cancelled) setReservations([]);
+      } finally {
+        if (!cancelled) setReservationsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    try {
+      const parsed = readJsonStorageWithLegacy('order_history', [], Array.isArray);
+      setOrders(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setOrders([]);
+    }
+  }, []);
+
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const save = async () => {
@@ -104,7 +158,16 @@ export function ProfileModal({ onClose, toast }) {
         birth_date: form.birth_date || '',
       });
       setProfile(updated);
-      login({ ...user, name: updated.name || form.name, avatar_url: updated.telegram_photo_url || updated.vk_avatar_url || user.avatar_url });
+      login({
+        ...user,
+        name: updated.name || form.name,
+        full_name: updated.full_name || form.full_name,
+        phone: updated.phone || form.phone,
+        birth_date: updated.birth_date || form.birth_date,
+        email: updated.email || form.email || user.email,
+        avatar_url: updated.telegram_photo_url || updated.vk_avatar_url || user.avatar_url,
+        is_pro: Boolean(updated.is_pro ?? user.is_pro),
+      });
       toast.ok(t('profile_saved'));
     } catch (e) {
       toast.err(e.message || t('profile_save_failed'));
@@ -256,6 +319,66 @@ export function ProfileModal({ onClose, toast }) {
                   )}
                 </div>
 
+                <div className="history-box">
+                  <div className="history-tabs">
+                    <button type="button" className={`history-tab${historyTab === 'reservations' ? ' on' : ''}`} onClick={() => setHistoryTab('reservations')}>
+                      <Icons.Cal /> {t('profile_my_reservations')}
+                    </button>
+                    <button type="button" className={`history-tab${historyTab === 'orders' ? ' on' : ''}`} onClick={() => setHistoryTab('orders')}>
+                      <Icons.Menu /> {t('profile_my_orders')}
+                    </button>
+                  </div>
+                  {historyTab === 'reservations' && (
+                    reservationsLoading ? (
+                      <div className="history-empty">{t('loading')}</div>
+                    ) : reservations.length === 0 ? (
+                      <div className="history-empty">{t('profile_reservations_empty')}</div>
+                    ) : (
+                      <div className="history-list">
+                        {reservations.slice().sort((a, b) => new Date(b.date + 'T' + (b.time || '00:00')) - new Date(a.date + 'T' + (a.time || '00:00'))).map(r => {
+                          const status = r.is_cancelled ? t('profile_history_status_cancelled') : r.is_confirmed ? t('profile_history_status_confirmed') : t('profile_history_status_pending');
+                          const statusCls = r.is_cancelled ? 'bad' : r.is_confirmed ? 'ok' : 'wait';
+                          return (
+                            <div key={r.id} className="history-item">
+                              <div className="history-item-top">
+                                <span className="history-item-date">{r.date} {r.time}</span>
+                                <span className={`admin-status ${statusCls}`} style={{ fontSize: 9, padding: '3px 7px', letterSpacing: 1.5 }}>{status}</span>
+                              </div>
+                              <div className="history-item-meta">{t('guests_short', { count: r.guests })}{r.restaurant?.address ? ` · ${r.restaurant.address}` : ''}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
+                  {historyTab === 'orders' && (
+                    orders.length === 0 ? (
+                      <div className="history-empty">{t('profile_orders_empty')}</div>
+                    ) : (
+                      <div className="history-list">
+                        {orders.map(o => (
+                          <div key={o.id} className="history-item">
+                            <div className="history-item-top">
+                              <span className="history-item-date">{new Date(o.date).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="history-item-total">{o.total} ₽</span>
+                            </div>
+                            <div className="history-item-meta">
+                              {t('order_history_items', { count: o.items?.reduce((s, i) => s + i.qty, 0) || 0 })}
+                              {' · '}
+                              {o.fulfillment === 'pickup' ? t('order_history_fulfillment_pickup') : t('order_history_fulfillment_delivery')}
+                            </div>
+                            {o.items?.length > 0 && (
+                              <div className="history-item-dishes">
+                                {o.items.map(i => <span key={i.id} className="history-dish-chip">{i.name} ×{i.qty}</span>)}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
+
                 <div className="fg">
                   <div className="fl">{t('auth_username')}</div>
                   <input className="fi" type="text" value={form.name} onChange={(e) => update('name', e.target.value)} />
@@ -281,7 +404,7 @@ export function ProfileModal({ onClose, toast }) {
                     {profile?.email_verified ? t('profile_email_verified_mark') : t('profile_email_not_verified_mark')}
                   </div>
                   <input className="fi" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="you@example.com" />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     <button type="button" className="btn btn-ghost" onClick={sendEmailCode}>{t('profile_send_code')}</button>
                     <input className="fi" style={{ maxWidth: 140 }} type="text" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} placeholder={t('profile_code')} />
                     <button type="button" className="btn btn-outline-gold" onClick={confirmEmailCode}>{t('auth_confirm')}</button>
@@ -320,6 +443,7 @@ export function ProfileModal({ onClose, toast }) {
             justify-content:space-between;
             gap: 12px;
             margin-bottom: 18px;
+            flex-wrap:wrap;
           }
           .pro-strip-left{display:flex;align-items:center;gap:12px;min-width:0;}
           .pro-strip-pill{
@@ -378,6 +502,46 @@ export function ProfileModal({ onClose, toast }) {
           }
           .event-badge svg{color:var(--gold);}
           .event-desc{margin-top:6px;color: var(--muted-strong); font-size: 12px; line-height: 1.55;}
+
+          .history-box{
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-lg);
+            padding: 12px;
+            background: var(--glass);
+            margin: 0 0 18px;
+          }
+          .history-tabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+          .history-tab{
+            display:inline-flex;align-items:center;gap:7px;
+            padding:8px 14px;border-radius:999px;
+            border:1px solid var(--glass-border);
+            background:transparent;
+            color:var(--muted);
+            font-size:11px;letter-spacing:1.4px;text-transform:uppercase;
+            cursor:pointer;transition:all .22s var(--ease);
+          }
+          .history-tab svg{color:var(--gold);opacity:.7;}
+          .history-tab:hover{border-color:rgba(201,169,110,0.35);color:var(--text);}
+          .history-tab.on{border-color:rgba(201,169,110,0.5);background:rgba(201,169,110,0.08);color:var(--gold);}
+          .history-tab.on svg{opacity:1;}
+          .history-empty{color:var(--muted);font-size:12px;padding:6px 0;}
+          .history-list{display:flex;flex-direction:column;gap:8px;}
+          .history-item{
+            border:1px solid var(--glass-border);
+            border-radius:12px;
+            padding:10px 12px;
+            background:var(--glass);
+          }
+          .history-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+          .history-item-date{color:var(--text);font-size:13px;font-weight:500;}
+          .history-item-total{color:var(--gold);font-size:14px;font-weight:600;}
+          .history-item-meta{color:var(--muted-strong);font-size:12px;line-height:1.5;}
+          .history-item-dishes{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+          .history-dish-chip{
+            display:inline-block;padding:3px 8px;border-radius:999px;
+            border:1px solid var(--glass-border);background:var(--glass);
+            color:var(--muted-strong);font-size:11px;
+          }
         `}</style>
       </div>
 
