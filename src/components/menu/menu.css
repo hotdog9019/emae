@@ -468,3 +468,38 @@
   color: var(--text);
   font-weight: 400;
 }
+
+.mc-fav-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(8,8,7,0.55);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.55);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.22s var(--ease);
+  z-index: 4;
+  line-height: 1;
+}
+.mc-fav-btn:hover {
+  border-color: rgba(201,169,110,0.6);
+  color: var(--gold);
+  transform: scale(1.12);
+}
+.mc-fav-btn.on {
+  color: #e84a5f;
+  border-color: rgba(232,74,95,0.4);
+  background: rgba(232,74,95,0.12);
+}
+.mc-fav-btn.on:hover {
+  color: #ff6b7a;
+  border-color: rgba(232,74,95,0.6);
+}

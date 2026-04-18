@@ -231,7 +231,7 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
       const order = {
         id: Date.now(),
         date: new Date().toISOString(),
-        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, price: i.price })),
+        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, price: i.price, img: i.img })),
         total,
         fulfillment,
         fulfillmentTime: fulfillmentTime || '',
@@ -239,6 +239,7 @@ export function CartDrawer({ cart, onClose, onQty, onRemove, toast, reservation,
         restaurantId: String(sourceRestaurantId || ''),
         address: address.trim(),
         comment: comment.trim(),
+        status: 'pending',
       };
       writeJsonStorage('order_history', [order, ...(Array.isArray(prev) ? prev : [])].slice(0, 50));
     } catch { /* ignore */ }

@@ -6,6 +6,7 @@ import { Icons } from '../icons/Icons';
 import { SLIDES, MENU } from '../../data/constants';
 import { makeStorageKey, readJsonStorageWithLegacy } from '../../utils/brand';
 import { DICT, DICT_LANGS, getI18nOverrides, setI18nOverrides } from '../../hooks/useI18n';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_CLS, ORDER_STATUS_FLOW, getAllOrderStatuses, setOrderStatus } from '../../utils/orderStatus';
 import './admin.css';
 
 const HERO_CONFIG_SUFFIX = 'hero_config';
@@ -142,6 +143,7 @@ export function AdminModal({ onClose, toast }) {
 
   const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
   const [adminOrders, setAdminOrders] = useState([]);
+  const [localOrderStatuses, setLocalOrderStatuses] = useState(() => getAllOrderStatuses());
   const [statsQuery, setStatsQuery] = useState('');
   const [statsSort, setStatsSort] = useState('orders24h_desc');
 
@@ -1794,43 +1796,46 @@ export function AdminModal({ onClose, toast }) {
           )}
 
           {tab === 'orders' && (
-            <div className="admin-split">
-              <div className="admin-panel">
-                <div className="admin-panel-h">
-                  <div>
-                    <div className="admin-panel-title">Доставка и самовывоз</div>
-                    <div className="admin-muted">Кто, куда и что заказал</div>
-                  </div>
-                  <button type="button" className="btn btn-ghost" onClick={loadAdminOrders} disabled={adminOrdersLoading}>
-                    <Icons.Refresh /> {t('refresh')}
-                  </button>
+            <div className="admin-panel" style={{ maxWidth: '100%' }}>
+              <div className="admin-panel-h">
+                <div>
+                  <div className="admin-panel-title">Заказы</div>
+                  <div className="admin-muted">Управление статусами — обновления видны клиенту в реальном времени</div>
                 </div>
-                <div className="admin-panel-scroll">
-                  {adminOrdersLoading && <div className="admin-muted">{t('loading')}</div>}
-                  {!adminOrdersLoading && adminOrders.length === 0 && <div className="admin-muted">Заказов пока нет.</div>}
-                  {adminOrders.map((order) => {
-                    const rest = restaurantById.get(order?.restaurant_id)?.address || (order?.restaurant_id ? `Ресторан #${order.restaurant_id}` : 'Не указан');
-                    const items = Array.isArray(order?.items) ? order.items : [];
-                    return (
-                      <div key={order.id} className="admin-row">
-                        <div className="admin-row-main">
-                          <div className="admin-row-name">
+                <button type="button" className="btn btn-ghost" onClick={loadAdminOrders} disabled={adminOrdersLoading}>
+                  <Icons.Refresh /> {t('refresh')}
+                </button>
+              </div>
+              <div className="admin-panel-scroll">
+                {adminOrdersLoading && <div className="admin-muted">{t('loading')}</div>}
+                {!adminOrdersLoading && adminOrders.length === 0 && <div className="admin-muted">Заказов пока нет.</div>}
+                {adminOrders.map((order) => {
+                  const rest = restaurantById.get(order?.restaurant_id)?.address || (order?.restaurant_id ? `Ресторан #${order.restaurant_id}` : 'Не указан');
+                  const items = Array.isArray(order?.items) ? order.items : [];
+                  const currentStatus = localOrderStatuses[String(order.id)] || 'pending';
+                  const currentIdx = ORDER_STATUS_FLOW.indexOf(currentStatus);
+                  return (
+                    <div key={order.id} className="admin-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <div className="admin-row-main" style={{ flex: 1 }}>
+                          <div className="admin-row-name" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             Заказ #{order.id}
                             <span className={`admin-status ${order?.fulfillment === 'pickup' ? 'wait' : 'ok'}`}>
                               {order?.fulfillment === 'pickup' ? 'Самовывоз' : 'Доставка'}
+                            </span>
+                            <span className={`admin-status ${ORDER_STATUS_CLS[currentStatus] || 'wait'}`}>
+                              {ORDER_STATUS_LABELS[currentStatus] || currentStatus}
                             </span>
                           </div>
                           <div className="admin-row-sub">
                             {order?.created_at ? new Date(order.created_at).toLocaleString() : 'Без даты'} · {rest}
                           </div>
                           <div className="admin-row-sub">
-                            {order?.fulfillment_time ? `На ${order.fulfillment_time}` : 'Время не указано'} · {order?.payment || 'Оплата не указана'} · {order?.total || 0} ₽
+                            {order?.fulfillment_time ? `На ${order.fulfillment_time}` : ''} · {order?.payment || ''} · {order?.total || 0} ₽
                           </div>
-                          <div className="admin-row-sub">
-                            {order?.address ? `Адрес: ${order.address}` : 'Адрес не указан'}
-                          </div>
-                          {order?.comment && <div className="admin-row-sub">Комментарий: {order.comment}</div>}
-                          <div className="admin-order-items">
+                          {order?.address && <div className="admin-row-sub">📍 {order.address}</div>}
+                          {order?.comment && <div className="admin-row-sub">💬 {order.comment}</div>}
+                          <div className="admin-order-items" style={{ marginTop: 6 }}>
                             {items.length === 0 && <span className="admin-order-chip">Без состава</span>}
                             {items.map((item, idx) => (
                               <span key={`${order.id}-${item?.id || idx}`} className="admin-order-chip">
@@ -1840,14 +1845,40 @@ export function AdminModal({ onClose, toast }) {
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="admin-stub">
-                <div className="admin-stub-h">Что видно сразу</div>
-                <div className="admin-muted">Вкладка собирает все заказы в одном месте: тип получения, ресторан-источник, адрес, время и состав корзины.</div>
+                      {/* Status stepper */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {ORDER_STATUS_FLOW.map((s, i) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`btn ${i === currentIdx ? 'btn-gold' : i < currentIdx ? 'btn-ghost' : 'btn-ghost'}`}
+                            style={{
+                              fontSize: 10, padding: '5px 10px', letterSpacing: 1,
+                              opacity: i < currentIdx ? 0.45 : 1,
+                            }}
+                            onClick={() => {
+                              setOrderStatus(order.id, s);
+                              setLocalOrderStatuses(getAllOrderStatuses());
+                            }}
+                          >
+                            {i < currentIdx ? '✓' : ''} {ORDER_STATUS_LABELS[s]}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="btn btn-outline-gold"
+                          style={{ fontSize: 10, padding: '5px 10px', letterSpacing: 1 }}
+                          onClick={() => {
+                            setOrderStatus(order.id, 'cancelled');
+                            setLocalOrderStatuses(getAllOrderStatuses());
+                          }}
+                        >
+                          Отменить
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -109,7 +109,7 @@ button{-webkit-tap-highlight-color:transparent;}
 .user-pop-btn.danger:hover{border-color:rgba(192,71,59,0.55);background:rgba(192,71,59,0.10);color:#fff;}
 
 /* HERO */
-.hero{position:relative;height:calc(100vh - var(--hdr-h));min-height:520px;overflow:hidden;}
+.hero{position:relative;height:calc(100vh - var(--hdr-h));min-height:520px;overflow:hidden;touch-action:pan-y;}
 .slides-wrap{display:flex;height:100%;transition:transform .95s var(--ease2);}
 .slide{min-width:100%;height:100%;position:relative;flex-shrink:0;overflow:hidden;}
 .slide-img{position:absolute;inset:0;pointer-events:none;}
@@ -155,7 +155,9 @@ button{-webkit-tap-highlight-color:transparent;}
 .arr-row{display:flex;gap:8px;}
 .arr-btn{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.35);backdrop-filter:blur(8px);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s var(--ease);}
 .arr-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(201,169,110,.1);transform:scale(1.08);}
-.hero-timer{position:absolute;top:18px;left:48px;z-index:20;width:44px;height:44px;border-radius:50%;background:var(--glass2);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(140%);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 22px rgba(0,0,0,0.25);transition:background-color .42s var(--ease),border-color .42s var(--ease),box-shadow .42s var(--ease);}
+.hero-timer{position:absolute;top:18px;left:48px;z-index:20;width:44px;height:44px;border-radius:50%;background:var(--glass2);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(140%);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 22px rgba(0,0,0,0.25);transition:background-color .3s,border-color .3s,box-shadow .3s;cursor:pointer;padding:0;}
+.hero-timer:hover{border-color:rgba(201,169,110,0.5);background:rgba(201,169,110,0.12);}
+.hero-timer.paused{border-color:rgba(201,169,110,0.45);background:rgba(201,169,110,0.1);}
 .hero-timer svg{width:26px;height:26px;transform:rotate(-90deg);}
 .hero-timer-track{stroke:var(--border2);stroke-width:3;fill:none;opacity:.9;}
 .hero-timer-prog{stroke:var(--gold);stroke-width:3;fill:none;stroke-linecap:round;animation:heroTimer var(--hero-int, 6500ms) linear forwards;will-change:stroke-dashoffset;}
@@ -389,10 +391,16 @@ button{-webkit-tap-highlight-color:transparent;}
   .hdr-right{gap:6px;}
   .ico-btn{width:36px;height:36px;font-size:13px;}
   .brand-name{font-size:22px;letter-spacing:3px;}
-  .slide-body{left:16px;right:16px;bottom:110px;}
-  .slider-ctrl{left:16px;bottom:20px;}
+  /* Mobile: hero uses natural height, not full viewport */
+  .hero{height:clamp(460px,72svh,680px);min-height:0;}
+  .slide-body{left:16px;right:16px;bottom:80px;padding:16px 18px;}
+  .slide-h{font-size:clamp(26px,7vw,44px);}
+  .slide-p{font-size:15px;max-width:100%;}
+  .slider-ctrl{left:16px;bottom:14px;}
   .hero-timer{left:16px;top:14px;}
   .slide-counter{right:16px;top:22px;}
+  /* Hide arrow buttons on touch — use swipe instead */
+  .arr-row{display:none;}
   /* Фикс: dropdown позиционируется относительно .hdr (sticky), а не .hdr-pop */
   .hdr-pop,.user-menu{position:static;}
   .hdr-menu{

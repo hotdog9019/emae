@@ -5,6 +5,7 @@ import './menu.css';
 import { Icons } from '../icons/Icons';
 import { DishModal } from './DishModal';
 import { useI18n } from '../../hooks/useI18n';
+import { useFavorites } from '../../hooks/useFavorites';
 
 const norm = (v) => String(v || '').trim().toLowerCase();
 const hasTag = (dish, tag) => Array.isArray(dish?.tags) && dish.tags.includes(tag);
@@ -121,6 +122,7 @@ const CAT_KEY = {
 
 export function MenuPage({ onAddToCart, onQty, onRemove, cart = [], toast }) {
   const { t } = useI18n();
+  const { toggle: toggleFav, isFavorite } = useFavorites();
   const [cat, setCat] = useState(ALL_CAT);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -506,6 +508,14 @@ export function MenuPage({ onAddToCart, onQty, onRemove, cart = [], toast }) {
               <img src={dish.img} alt={dish.name} loading="lazy"/>
               {dish.badge && <div className="mc-badge">{dish.badge}</div>}
               {inCartQty > 0 && <div className="mc-cart-badge">{inCartQty}</div>}
+              <button
+                type="button"
+                className={`mc-fav-btn${isFavorite(dish.id) ? ' on' : ''}`}
+                aria-label={isFavorite(dish.id) ? 'Убрать из избранного' : 'Добавить в избранное'}
+                onClick={(e) => { e.stopPropagation(); toggleFav(dish.id); }}
+              >
+                {isFavorite(dish.id) ? '♥' : '♡'}
+              </button>
             </div>
             <div className="mc-body">
               <div className="mc-tags">

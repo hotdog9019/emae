@@ -316,7 +316,19 @@ function AppContent() {
       {modal === 'login' && <LoginModal onClose={closeOverlay} onRegister={() => openModal('register')} onForgotPassword={() => openModal('forgot')} toast={toast} />}
       {modal === 'register' && <RegisterModal onClose={closeOverlay} onLogin={() => openModal('login')} toast={toast} />}
       {modal === 'forgot' && <ForgotPasswordModal onClose={closeOverlay} onBackToLogin={() => openModal('login')} toast={toast} />}
-      {modal === 'profile' && <ProfileModal onClose={closeOverlay} toast={toast} />}
+      {modal === 'profile' && (
+        <ProfileModal
+          onClose={closeOverlay}
+          toast={toast}
+          onRepeatOrder={(items) => {
+            items.forEach(item => {
+              for (let i = 0; i < (item.qty || 1); i++) addToCart(item);
+            });
+            closeOverlay();
+            openCart();
+          }}
+        />
+      )}
       {modal === 'reserve' && <ReserveModal onClose={closeOverlay} toast={toast} onReservationCreated={() => setReservationVersion(v => v + 1)} />}
       {modal === 'reserve-error' && (
         <div className="modal-ov" onClick={(e) => e.target === e.currentTarget && closeOverlay()}>
@@ -363,12 +375,14 @@ function AppContent() {
 
       <Toast list={toast.list} />
 
-      <SupportWidget
-        onOpenLogin={() => openModal('login')}
-        toast={toast}
-        onOpenReserve={() => { if (!user) { openModal('reserve-error'); } else { openModal('reserve'); } }}
-        onNavigate={navigatePage}
-      />
+      {page === 'home' && (
+        <SupportWidget
+          onOpenLogin={() => openModal('login')}
+          toast={toast}
+          onOpenReserve={() => { if (!user) { openModal('reserve-error'); } else { openModal('reserve'); } }}
+          onNavigate={navigatePage}
+        />
+      )}
     </>
   );
 }

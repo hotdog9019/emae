@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SLIDES, MENU } from '../../data/constants';
 import { Icons } from '../icons/Icons';
 import { useInView } from '../../hooks/useInView';
@@ -100,7 +100,6 @@ function FadeSlideImage({ src, alt, priority = false, freeze = false }) {
           setFading(false);
         }, 420);
       };
-
       if (typeof img.decode === 'function') {
         img.decode().then(done).catch(done);
       } else {
@@ -134,6 +133,7 @@ function FadeSlideImage({ src, alt, priority = false, freeze = false }) {
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         fetchPriority={priority ? 'high' : 'auto'}
+        onError={(e) => { e.currentTarget.style.opacity = '0'; }}
       />
       {nextSrc && (
         <img
@@ -145,6 +145,7 @@ function FadeSlideImage({ src, alt, priority = false, freeze = false }) {
           loading="eager"
           decoding="async"
           fetchPriority="high"
+          onError={(e) => { e.currentTarget.style.opacity = '0'; }}
         />
       )}
     </div>
@@ -152,10 +153,11 @@ function FadeSlideImage({ src, alt, priority = false, freeze = false }) {
 }
 
 export function HeroPage({ onAddToCart, toast, setPage, setModal, onOpenAdminEdit }) {
-  const { theme, t } = useI18n();
+  const { t } = useI18n();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role_name === 'admin' || user?.is_admin;
   const [cur, setCur] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [slides, setSlides] = useState(getActiveSlides);
   const introRef = useRef(null);
   const cardsRef = useRef(null);
@@ -163,8 +165,10 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal, onOpenAdminEdi
   const timerRadius = 11;
   const timerCirc = 2 * Math.PI * timerRadius;
   const preloadedRef = useRef(new Set());
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
 
-  // Reload slides when config changes (e.g. after admin saves)
+  // Reload slides when admin config changes
   useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === HERO_CONFIG_KEY) {
@@ -182,10 +186,27 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal, onOpenAdminEdi
   const prev = (cur - 1 + len) % len;
   const next = (cur + 1) % len;
 
+  // Auto-advance (stops when paused)
   useEffect(() => {
+    if (paused) return;
     const id = window.setTimeout(() => setCur(s => (s + 1) % len), INTERVAL);
     return () => window.clearTimeout(id);
-  }, [cur, len, INTERVAL]);
+  }, [cur, len, paused]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') {
+        setCur(s => (s + 1) % len);
+        setPaused(false);
+      } else if (e.key === 'ArrowLeft') {
+        setCur(s => (s - 1 + len) % len);
+        setPaused(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [len]);
 
   // Preload adjacent slides
   useEffect(() => {
@@ -201,89 +222,165 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal, onOpenAdminEdi
     });
   }, [next, prev, slides]);
 
-  const go = i => setCur((i + len) % len);
+  const go = useCallback((i) => {
+    setCur((i + len) % len);
+  }, [len]);
+
+  // Touch / swipe handlers
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = Math.abs(e.changedTouches[0].clientY - (touchStartY.current || 0));
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(dx) < 40 || dy > Math.abs(dx)) return; // not a horizontal swipe
+    if (dx < 0) setCur(s => (s + 1) % len);
+    else setCur(s => (s - 1 + len) % len);
+  };
 
   return (
     <main className="home">
-      <section className="hero">
-        <div className="hero-timer" aria-hidden="true" key={cur} style={{ '--hero-int': `${INTERVAL}ms` }}>
-          <svg viewBox="0 0 32 32">
-            <circle className="hero-timer-track" cx="16" cy="16" r={timerRadius} />
-            <circle
-              className="hero-timer-prog"
-              cx="16"
-              cy="16"
-              r={timerRadius}
-              strokeDasharray={timerCirc}
-              strokeDashoffset={timerCirc}
-            />
-          </svg>
+      <section
+        className="hero"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Timer / pause button */}
+        <button
+          type="button"
+          className={`hero-timer${paused ? ' paused' : ''}`}
+          aria-label={paused ? t('hero_resume') || 'Возобновить' : t('hero_pause') || 'Пауза'}
+          onClick={() => setPaused(p => !p)}
+          // Use key to restart animation only when resuming (not pausing)
+          key={paused ? 'paused' : cur}
+          style={{ '--hero-int': `${INTERVAL}ms`, cursor: 'pointer' }}
+        >
+          {paused ? (
+            /* Pause icon — two vertical bars */
+            <svg viewBox="0 0 26 26" style={{ width: 18, height: 18, transform: 'none' }}>
+              <rect x="5" y="4" width="5" height="18" rx="2" fill="var(--gold)" />
+              <rect x="16" y="4" width="5" height="18" rx="2" fill="var(--gold)" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 32 32">
+              <circle className="hero-timer-track" cx="16" cy="16" r={timerRadius} />
+              <circle
+                className="hero-timer-prog"
+                cx="16"
+                cy="16"
+                r={timerRadius}
+                strokeDasharray={timerCirc}
+                strokeDashoffset={timerCirc}
+              />
+            </svg>
+          )}
+        </button>
+
+        <div className="slide-counter">
+          <strong>{String(cur + 1).padStart(2, '0')}</strong> / {String(slides.length).padStart(2, '0')}
         </div>
-        <div className="slide-counter"><strong>{String(cur+1).padStart(2,'0')}</strong> / {String(slides.length).padStart(2,'0')}</div>
-        <div className="slides-wrap" style={{transform:`translateX(-${cur*100}%)`}}>
+
+        <div
+          className="slides-wrap"
+          style={{ transform: `translateX(-${cur * 100}%)` }}
+        >
           {slides.map((sl, i) => {
             const dishName = sl.dishNameOverride || (sl.dishKey ? t(sl.dishKey) : '');
-            const tagLabel = sl.tagOverride !== undefined ? sl.tagOverride : (sl.tagKeyFallback ? t(sl.tagKeyFallback) : (sl.tagKey ? t(sl.tagKey) : ''));
-            const titleA = sl.titleAKey ? t(sl.titleAKey) : dishName.split(' ').slice(0,2).join(' ');
+            const tagLabel = sl.tagOverride !== undefined
+              ? sl.tagOverride
+              : (sl.tagKeyFallback ? t(sl.tagKeyFallback) : (sl.tagKey ? t(sl.tagKey) : ''));
+            const titleA = sl.titleAKey ? t(sl.titleAKey) : dishName.split(' ').slice(0, 2).join(' ');
             const titleB = sl.titleBKey ? t(sl.titleBKey) : dishName.split(' ').slice(2).join(' ');
             const desc = sl.descOverride !== undefined ? sl.descOverride : (sl.descKey ? t(sl.descKey) : '');
             return (
-            <div key={i} className={`slide${i===cur?" cur":""}`}>
-              <FadeSlideImage
-                src={(i === cur || i === prev || i === next) ? sl.img : null}
-                alt={dishName}
-                priority={i === cur}
-                freeze={i !== cur}
-              />
-              <div className="slide-fog slide-fog-dark" />
-              <div className="slide-fog slide-fog-light" />
-              <div className="slide-body">
-                <div className="slide-tag">{tagLabel}</div>
-                <h1 className="slide-h">{titleA}{titleB ? <><br/><em>{titleB}</em></> : null}</h1>
-                {desc && <p className="slide-p">{desc}</p>}
-                <div className="slide-cta">
-                  <button type="button" className="btn btn-gold btn-hero" onClick={() => {
-                    const d = MENU.find(x => x.id===sl.dishId);
-                    if(d){onAddToCart(d);toast.ok(t('toast_added_to_cart', { name: dishName }));}
+              <div key={i} className={`slide${i === cur ? ' cur' : ''}`}>
+                <FadeSlideImage
+                  src={(i === cur || i === prev || i === next) ? sl.img : null}
+                  alt={dishName}
+                  priority={i === cur}
+                  freeze={i !== cur}
+                />
+                <div className="slide-fog slide-fog-dark" />
+                <div className="slide-fog slide-fog-light" />
+                <div className="slide-body">
+                  <div className="slide-tag">{tagLabel}</div>
+                  <h1 className="slide-h">
+                    {titleA}{titleB ? <><br /><em>{titleB}</em></> : null}
+                  </h1>
+                  {desc && <p className="slide-p">{desc}</p>}
+                  <div className="slide-cta">
+                    <button type="button" className="btn btn-gold btn-hero" onClick={() => {
+                      const d = MENU.find(x => x.id === sl.dishId);
+                      if (d) { onAddToCart(d); toast.ok(t('toast_added_to_cart', { name: dishName })); }
+                    }}>
+                      <Icons.Plus /> {t('hero_order_now')}
+                    </button>
+                    <button type="button" className="btn btn-hero-ghost" onClick={() => setPage('menu')}>
+                      {t('hero_view_menu')}
+                    </button>
+                  </div>
+                </div>
+                <div className="price-card">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="pc-admin-edit"
+                      title={t('admin_hero_tab')}
+                      onClick={() => setModal && setModal('admin')}
+                    >
+                      <Icons.Image />
+                    </button>
+                  )}
+                  <div className="pc-label">{t('hero_dish_of_day')}</div>
+                  <div className="pc-name">{dishName}</div>
+                  <div className="pc-price"><sup>₽</sup>{sl.price}</div>
+                  <div className="pc-desc">{sl.weight}</div>
+                  <button type="button" className="pc-btn" onClick={() => {
+                    const d = MENU.find(x => x.id === sl.dishId);
+                    if (d) { onAddToCart(d); toast.ok(t('toast_added_to_cart', { name: dishName })); }
                   }}>
-                    <Icons.Plus /> {t('hero_order_now')}
+                    + {t('to_cart')}
                   </button>
-                  <button type="button" className="btn btn-hero-ghost" onClick={() => setPage("menu")}>{t('hero_view_menu')}</button>
                 </div>
               </div>
-              <div className="price-card">
-                {isAdmin && (
-                  <button
-                    type="button"
-                    className="pc-admin-edit"
-                    title={t('admin_hero_tab')}
-                    onClick={() => setModal && setModal('admin')}
-                  >
-                    <Icons.Image />
-                  </button>
-                )}
-                <div className="pc-label">{t('hero_dish_of_day')}</div>
-                <div className="pc-name">{dishName}</div>
-                <div className="pc-price"><sup>₽</sup>{sl.price}</div>
-                <div className="pc-desc">{sl.weight}</div>
-                <button type="button" className="pc-btn" onClick={() => {
-                  const d = MENU.find(x => x.id===sl.dishId);
-                  if(d){onAddToCart(d);toast.ok(t('toast_added_to_cart', { name: dishName }));}
-                }}>
-                  + {t('to_cart')}
-                </button>
-              </div>
-            </div>
             );
           })}
         </div>
+
         <div className="slider-ctrl">
           <div className="dots-row">
-            {slides.map((_, i) => <button key={i} type="button" className={`dot-el${i===cur?" on":""}`} onClick={() => go(i)} aria-label={t('hero_slide_aria', { index: i + 1 })}/>)}
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`dot-el${i === cur ? ' on' : ''}`}
+                onClick={() => { go(i); setPaused(false); }}
+                aria-label={t('hero_slide_aria', { index: i + 1 })}
+              />
+            ))}
           </div>
           <div className="arr-row">
-            <button type="button" className="arr-btn" onClick={() => go(cur-1)} aria-label={t('hero_prev_slide')}><Icons.ChL /></button>
-            <button type="button" className="arr-btn" onClick={() => go(cur+1)} aria-label={t('hero_next_slide')}><Icons.ChR /></button>
+            <button
+              type="button"
+              className="arr-btn"
+              onClick={() => { go(cur - 1); setPaused(false); }}
+              aria-label={t('hero_prev_slide')}
+            >
+              <Icons.ChL />
+            </button>
+            <button
+              type="button"
+              className="arr-btn"
+              onClick={() => { go(cur + 1); setPaused(false); }}
+              aria-label={t('hero_next_slide')}
+            >
+              <Icons.ChR />
+            </button>
           </div>
         </div>
       </section>
@@ -295,11 +392,8 @@ export function HeroPage({ onAddToCart, toast, setPage, setModal, onOpenAdminEdi
             <h2 className="home-title">
               {t('home_title_pre')} <em>{t('home_title_em')}</em> {t('home_title_post')}
             </h2>
-            <p className="home-lead">
-              {t('home_lead')}
-            </p>
+            <p className="home-lead">{t('home_lead')}</p>
           </div>
-
           <div className="home-actions reveal" style={{ '--d': '140ms' }}>
             <button type="button" className="btn btn-gold" onClick={() => setModal?.('reserve')}>
               <Icons.Cal /> {t('home_reserve')}
